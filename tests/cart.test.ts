@@ -71,6 +71,12 @@ suite('add')
   eq(nudged.lines[0].qty, 1.05, 'the fine step is 50g, and belongs to the +/- buttons')
 }
 {
+  const state = run([{ type: 'add', product: rice, qty: 0.5 }])
+  eq(state.lines[0].qty, 0.5, 'fractional quantity (e.g. half kilo from voice) is preserved')
+  const bumped = cartReducer(state, { type: 'add', product: rice, qty: 1.5 })
+  eq(bumped.lines[0].qty, 2, 'subsequent add with quantity adds correctly (0.5 + 1.5 = 2.0)')
+}
+{
   const lines: CartAction[] = []
   for (let i = 0; i < LIMITS.maxSaleLines + 5; i += 1) {
     lines.push({ type: 'add', product: product({ id: `p-${i}` }) })
@@ -78,6 +84,7 @@ suite('add')
   const state = run(lines)
   eq(state.lines.length, LIMITS.maxSaleLines, 'the line ceiling holds')
 }
+
 
 suite('custom lines')
 {

@@ -95,7 +95,7 @@ export async function getDashboardToday(shopId: string): Promise<DashboardToday>
   try {
     const outboxRecords = await listOutbox({ shopId })
     for (const r of outboxRecords) {
-      if (r.status !== 'pending') continue   // skip sent / done / failed
+      if (r.status === 'failed') continue   // skip permanently failed records
       const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
 
       if (r.op === 'create_sale') {

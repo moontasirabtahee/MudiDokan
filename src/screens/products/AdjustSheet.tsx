@@ -10,6 +10,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { ADJUST_REASONS } from '@/lib/constants'
 import type { ProductStatus, StockReason } from '@/lib/database.types'
 import { newId } from '@/lib/utils'
+import { invalidateCacheKey, invalidateCachePrefix } from '@/offline/db'
 import { useShop } from '@/providers/ShopProvider'
 import {
   type AdjustMode,
@@ -76,6 +77,10 @@ export function AdjustSheet({
     })
     const out = await write.write({ args: { payload } })
     if (out.ok) {
+      void invalidateCacheKey(shopId, 'products:catalog')
+      void invalidateCacheKey(shopId, `product:${product.id}`)
+      void invalidateCacheKey(shopId, 'dashboard:today')
+      void invalidateCachePrefix(shopId, 'products:')
       close()
       onDone?.()
     }

@@ -9,6 +9,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { CASH_DENOMINATIONS, TENDER_OPTIONS } from '@/lib/constants'
 import type { PaymentMethod, PaymentResult, SupplierDue } from '@/lib/database.types'
 import { newId } from '@/lib/utils'
+import { invalidateCacheKey, invalidateCachePrefix } from '@/offline/db'
 import { useShop } from '@/providers/ShopProvider'
 
 export function PaySupplierSheet({
@@ -60,6 +61,12 @@ export function PaySupplierSheet({
     })
 
     if (outcome.ok) {
+      void invalidateCacheKey(shopId, 'party:suppliers')
+      void invalidateCacheKey(shopId, `party:${supplier.id}`)
+      void invalidateCacheKey(shopId, `party:ledger:${supplier.id}`)
+      void invalidateCacheKey(shopId, 'dashboard:today')
+      void invalidateCachePrefix(shopId, 'party:')
+      void invalidateCachePrefix(shopId, 'reports:')
       onPaid?.()
       onClose()
     }

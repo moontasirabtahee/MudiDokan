@@ -15,6 +15,7 @@ import { searchCatalog } from '@/lib/catalog'
 import { ROUTES, detailPath } from '@/lib/constants'
 import type { CreatePurchasePayload, ProductStatus, PurchaseItemInput, PurchaseResult } from '@/lib/database.types'
 import { newId } from '@/lib/utils'
+import { invalidateCacheKey, invalidateCachePrefix } from '@/offline/db'
 import { useShop } from '@/providers/ShopProvider'
 import { Icon } from '@/components/ui/Icon'
 import { VoiceProductCreateModal } from '@/components/voice/VoiceProductCreateModal'
@@ -109,6 +110,11 @@ export default function PurchaseNew() {
     })
 
     if (outcome.ok) {
+      void invalidateCacheKey(shopId, 'purchases:list')
+      void invalidateCacheKey(shopId, 'products:catalog')
+      void invalidateCacheKey(shopId, 'dashboard:today')
+      void invalidateCachePrefix(shopId, 'party:')
+      void invalidateCachePrefix(shopId, 'reports:')
       if (outcome.result?.purchase.id) {
         navigate(detailPath('purchase', outcome.result.purchase.id))
       } else {

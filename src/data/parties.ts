@@ -230,8 +230,10 @@ export interface CustomerDraft {
  * customer later. Adding a customer happens once per person; selling to them
  * happens every day, and that path never needs a network.
  */
+import { invalidateCacheKey, invalidateCachePrefix } from '@/offline/db'
+
 export async function createCustomer(shopId: string, draft: CustomerDraft): Promise<Customer> {
-  return unwrap(
+  const result = await unwrap<Customer>(
     supabase
       .from('customers')
       .insert({
@@ -246,13 +248,31 @@ export async function createCustomer(shopId: string, draft: CustomerDraft): Prom
       .select('*')
       .single(),
   )
+
+  void invalidateCacheKey(shopId, 'party:customers')
+  void invalidateCacheKey(shopId, 'dashboard:today')
+  void invalidateCachePrefix(shopId, 'party:')
+
+  return result
 }
 
 export async function updateCustomer(
   customerId: string,
   patch: Partial<CustomerDraft> & { is_active?: boolean },
 ): Promise<Customer> {
-  return unwrap(supabase.from('customers').update(patch).eq('id', customerId).select('*').single())
+  const result = await unwrap<Customer>(
+    supabase.from('customers').update(patch).eq('id', customerId).select('*').single(),
+  )
+
+  if (result.shop_id) {
+    void invalidateCacheKey(result.shop_id, 'party:customers')
+    void invalidateCacheKey(result.shop_id, `party:${customerId}`)
+    void invalidateCacheKey(result.shop_id, `party:ledger:${customerId}`)
+    void invalidateCacheKey(result.shop_id, 'dashboard:today')
+    void invalidateCachePrefix(result.shop_id, 'party:')
+  }
+
+  return result
 }
 
 export interface SupplierDraft {
@@ -264,7 +284,7 @@ export interface SupplierDraft {
 }
 
 export async function createSupplier(shopId: string, draft: SupplierDraft): Promise<Supplier> {
-  return unwrap(
+  const result = await unwrap<Supplier>(
     supabase
       .from('suppliers')
       .insert({
@@ -279,11 +299,27 @@ export async function createSupplier(shopId: string, draft: SupplierDraft): Prom
       .select('*')
       .single(),
   )
+
+  void invalidateCacheKey(shopId, 'party:suppliers')
+  void invalidateCachePrefix(shopId, 'party:')
+
+  return result
 }
 
 export async function updateSupplier(
   supplierId: string,
   patch: Partial<SupplierDraft> & { is_active?: boolean },
 ): Promise<Supplier> {
-  return unwrap(supabase.from('suppliers').update(patch).eq('id', supplierId).select('*').single())
+  const result = await unwrap<Supplier>(
+    supabase.from('suppliers').update(patch).eq('id', supplierId).select('*').single(),
+  )
+
+  if (result.shop_id) {
+    void invalidateCacheKey(result.shop_id, 'party:suppliers')
+    void invalidateCacheKey(result.shop_id, `party:${supplierId}`)
+    void invalidateCacheKey(result.shop_id, `party:ledger:${supplierId}`)
+    void invalidateCachePrefix(result.shop_id, 'party:')
+  }
+
+  return result
 }

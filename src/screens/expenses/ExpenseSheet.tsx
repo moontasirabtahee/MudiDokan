@@ -11,6 +11,7 @@ import { EXPENSE_CATEGORIES, EXPENSE_ORDER } from '@/lib/constants'
 import type { ExpenseCategory } from '@/lib/database.types'
 import { newId } from '@/lib/utils'
 import { llmParseExpense, parseSpokenExpense } from '@/lib/voice'
+import { invalidateCacheKey, invalidateCachePrefix } from '@/offline/db'
 import { useShop } from '@/providers/ShopProvider'
 
 export function ExpenseSheet({
@@ -91,6 +92,9 @@ export function ExpenseSheet({
     })
 
     if (outcome.ok) {
+      void invalidateCacheKey(shopId, 'dashboard:today')
+      void invalidateCachePrefix(shopId, 'reports:')
+      void invalidateCachePrefix(shopId, 'expenses:')
       onSaved?.()
       onClose()
     }

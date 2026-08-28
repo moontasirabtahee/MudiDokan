@@ -107,8 +107,10 @@ export interface ProductDraft {
   note?: string | null
 }
 
+import { invalidateCacheKey, invalidateCachePrefix } from '@/offline/db'
+
 export async function createProduct(shopId: string, draft: ProductDraft): Promise<Product> {
-  return unwrap(
+  const result = await unwrap<Product>(
     supabase
       .from('products')
       .insert({
@@ -131,6 +133,13 @@ export async function createProduct(shopId: string, draft: ProductDraft): Promis
       .select('*')
       .single(),
   )
+
+  void invalidateCacheKey(shopId, 'products:catalog')
+  void invalidateCacheKey(shopId, 'dashboard:today')
+  void invalidateCachePrefix(shopId, 'products:')
+  void invalidateCachePrefix(shopId, 'product:')
+
+  return result
 }
 
 export async function updateProduct(
@@ -140,11 +149,28 @@ export async function updateProduct(
   // `stock` is absent from `ProductDraft` on purpose: it is a trigger-maintained
   // cache over `stock_ledger`, and the only honest way to change it is
   // `adjust_stock`, which writes a ledger entry saying why.
-  return unwrap(supabase.from('products').update(patch).eq('id', productId).select('*').single())
+  const result = await unwrap<Product>(
+    supabase.from('products').update(patch).eq('id', productId).select('*').single(),
+  )
+
+  if (result.shop_id) {
+    void invalidateCacheKey(result.shop_id, 'products:catalog')
+    void invalidateCacheKey(result.shop_id, `product:${productId}`)
+    void invalidateCacheKey(result.shop_id, 'dashboard:today')
+    void invalidateCachePrefix(result.shop_id, 'products:')
+    void invalidateCachePrefix(result.shop_id, 'product:')
+  }
+
+  return result
 }
 
 export async function createCategory(shopId: string, name: string): Promise<Category> {
-  return unwrap(supabase.from('categories').insert({ shop_id: shopId, name }).select('*').single())
+  const result = await unwrap<Category>(
+    supabase.from('categories').insert({ shop_id: shopId, name }).select('*').single(),
+  )
+  void invalidateCacheKey(shopId, 'categories')
+  void invalidateCachePrefix(shopId, 'categories')
+  return result
 }
 
 /**

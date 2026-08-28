@@ -11,6 +11,7 @@ import type {
 import { LIMITS } from '@/lib/constants'
 import { addDays, isoDay } from '@/lib/format'
 import { supabase, unwrap, unwrapAs } from '@/lib/supabase'
+import { listOutbox } from '@/offline/outbox'
 
 /**
  * Transaction reads: sales, purchases, payments, expenses.
@@ -155,8 +156,36 @@ export async function listExpenses(
       .lte('spent_at', `${addDays(toDay, SLACK_DAYS)}T23:59:59`)
       .order('spent_at', { ascending: false })
       .limit(LIMITS.ledgerPage),
-  )
-  return rows.filter((row) => {
+  ).catch(() => [] as Expense[])
+
+  let pendingExpenses: Expense[] = []
+  try {
+    const outboxRecords = await listOutbox({ shopId })
+    pendingExpenses = outboxRecords
+      .filter((r) => r.op === 'create_expense' && r.status !== 'failed')
+      .map((r) => {
+        const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
+        return {
+          id: r.id,
+          shop_id: r.shopId,
+          category: (payload.category as Expense['category']) || 'other',
+          amount: Number(payload.amount ?? r.amount ?? 0),
+          note: (payload.note as string) || null,
+          spent_at: (payload.spent_at as string) || r.createdAt,
+          created_by: null,
+          created_at: r.createdAt,
+          client_uuid: (payload.client_uuid as string) || r.id,
+        } as Expense
+      })
+  } catch {
+    // Ignore outbox read failures
+  }
+
+  const existingUuids = new Set(rows.map((r) => r.client_uuid).filter(Boolean))
+  const uniquePending = pendingExpenses.filter((p) => !existingUuids.has(p.client_uuid))
+
+  const all = [...uniquePending, ...rows]
+  return all.filter((row) => {
     const day = isoDay(row.spent_at, timeZone)
     return day >= fromDay && day <= toDay
   })

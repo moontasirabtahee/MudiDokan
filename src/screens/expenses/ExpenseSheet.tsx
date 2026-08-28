@@ -43,6 +43,7 @@ export function ExpenseSheet({
           category,
           amount: amount,
           note: note.trim() || null,
+          spent_at: new Date().toISOString(),
         },
       },
       amount: amount,

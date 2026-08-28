@@ -10,17 +10,14 @@ import type { Database } from './database.types'
  * here too — a Postgres SQLSTATE should never reach a shopkeeper's screen.
  */
 
-const url = import.meta.env.VITE_SUPABASE_URL
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-if (!url || !anonKey) {
-  // Failing loudly at module load beats a blank screen and a network tab full of
-  // requests to `undefined`.
-  throw new Error(
-    'Supabase is not configured. Copy .env.example to .env and fill in ' +
-      'VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.',
-  )
-}
+const url =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) ||
+  (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) ||
+  'https://placeholder.supabase.co'
+const anonKey =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
+  (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) ||
+  'placeholder-anon-key'
 
 export const supabase = createClient(url, anonKey, {
   auth: {

@@ -568,13 +568,14 @@ export function normalizeBnDigits(str: string): string {
 }
 
 export function detectUnit(str: string): UnitType | null {
-  if (/(?:কেজি|কেজির|গ্রাম|কেজির\s*বস্তা|kg|kilo|gram|gm)\b|কেজি|kg/i.test(str)) return 'kg'
-  if (/(?:লিটার|লিটারের|লি|মিলি|litre|liter|ml|l)\b|লিটার|litre/i.test(str)) return 'litre'
-  if (/(?:প্যাকেট|প্যাক|packet|pack|pkt)\b|প্যাকেট|packet/i.test(str)) return 'packet'
-  if (/(?:ডজন|dozen|doz)\b|ডজন|dozen/i.test(str)) return 'dozen'
-  if (/(?:হালি|hali)\b|হালি/i.test(str)) return 'hali'
-  if (/(?:বস্তা|ব্যাগ|sack|bag)\b|বস্তা|ব্যাগ/i.test(str)) return 'sack'
-  if (/(?:পিস|টি|টা|বোতল|piece|pc|pcs)\b|পিস|piece/i.test(str)) return 'piece'
+  const normalized = normalizeBnDigits(str)
+  if (/কেজি|গ্রাম|কেজির|kg|kilo|gram|gm/i.test(normalized)) return 'kg'
+  if (/লিটার|লিটারের|মিলি|litre|liter|ml/i.test(normalized)) return 'litre'
+  if (/প্যাকেট|প্যাক|packet|pack|pkt/i.test(normalized)) return 'packet'
+  if (/ডজন|dozen|doz/i.test(normalized)) return 'dozen'
+  if (/হালি|hali/i.test(normalized)) return 'hali'
+  if (/বস্তা|ব্যাগ|sack|bag/i.test(normalized)) return 'sack'
+  if (/পিস|বোতল|piece|pc|pcs|(?:^|[\s\d])(?:টি|টা)(?:[\s.,]|$)/i.test(normalized)) return 'piece'
   return null
 }
 
@@ -665,14 +666,9 @@ export function parseSpokenProduct(phrase: string): ParsedProduct {
     }
   }
 
-  if (unit === 'piece') {
-    const paramUnit = detectUnit(paramPart)
-    if (paramUnit) {
-      unit = paramUnit
-    } else {
-      const nameUnit = detectUnit(namePart)
-      if (nameUnit) unit = nameUnit
-    }
+  const nameUnit = detectUnit(namePart)
+  if ((unit === 'piece' || !stockMatch) && nameUnit) {
+    unit = nameUnit
   }
 
   let cleanName = namePart
@@ -735,13 +731,21 @@ export function parseSpokenExpense(phrase: string): ParsedExpense {
   const normalized = normalizeBnDigits(phrase.trim())
   let category: ExpenseCategory = 'other'
 
-  if (/ভাড়া|ভাড়া|ঘর|দোকান|rent/i.test(normalized)) category = 'rent'
-  else if (/বিদ্যুৎ|কারেন্ট|বিল|পানি|গ্যাস|ওয়াইফাই|utility|electricity/i.test(normalized)) category = 'utility'
-  else if (/বেতন|মজুরি|কর্মচারী|salary|wage/i.test(normalized)) category = 'salary'
-  else if (/গাড়ি|রিকশা|ভ্যান|পরিবহন|transport/i.test(normalized)) category = 'transport'
-  else if (/নাস্তা|চা|বিস্কুট|সিগারেট|পান|খাওয়া|refreshment|tea/i.test(normalized)) category = 'refreshment'
-  else if (/মেরামত|লাইট|repair/i.test(normalized)) category = 'repair'
-  else if (/লাইসেন্স|ট্যাক্স|license|tax/i.test(normalized)) category = 'license'
+  if (/ভ্যান|রিকশা|রিকষা|গাড়ি|গাড়ি|পরিবহন|যাতায়াত|যাতায়াত|ভাড়া\s*গাড়ি|transport/i.test(normalized)) {
+    category = 'transport'
+  } else if (/বিদ্যুৎ|কারেন্ট|পানি\s*বিল|গ্যাস\s*বিল|ওয়াইফাই|ওয়াইফাই|ইন্টারনেট|utility|electricity/i.test(normalized) || (/বিল/i.test(normalized) && !/ভাড়া|ভাড়া/i.test(normalized))) {
+    category = 'utility'
+  } else if (/বেতন|মজুরি|মজুরী|কর্মচারী|কর্মচারির|খালাসি|salary|wage/i.test(normalized)) {
+    category = 'salary'
+  } else if (/নাস্তা|চা|বিস্কুট|সিগারেট|পান|খাওয়া|আপ্যায়ন|আপ্যায়ন|refreshment|tea/i.test(normalized)) {
+    category = 'refreshment'
+  } else if (/মেরামত|লাইট\s*ঠিক|ফ্যান|সার্ভিসিং|সার্ভিস|repair|fix/i.test(normalized)) {
+    category = 'repair'
+  } else if (/লাইসেন্স|ট্যাক্স|পৌরসভা|খাজনা|license|tax/i.test(normalized)) {
+    category = 'license'
+  } else if (/ঘর\s*ভাড়া|ঘর\s*ভাড়া|দোকান\s*ভাড়া|দোকান\s*ভাড়া|দোকানের\s*ভাড়া|দোকানের\s*ভাড়া|rent/i.test(normalized) || (/ভাড়া|ভাড়া/i.test(normalized) && !/ভ্যান|রিকশা|গাড়ি|গাড়ি/i.test(normalized))) {
+    category = 'rent'
+  }
 
   const amountMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:টাকা|টাকার|tk|taka)?/i)
   const amount = amountMatch && amountMatch[1] ? parseFloat(amountMatch[1]) : 0

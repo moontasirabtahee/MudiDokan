@@ -37,8 +37,8 @@ export interface ParsedKhataEntry {
 }
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const GROQ_MODEL = 'llama-3.3-70b-versatile'
-const GROQ_FALLBACK_MODEL = 'llama-3.1-8b-instant'
+const GROQ_MODEL = 'openai/gpt-oss-20b'
+const GROQ_FALLBACK_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
 
 /* ── System Prompts ───────────────────────────────────────────────────────── */
 
@@ -206,30 +206,67 @@ async function callGroqDirect(systemPrompt: string, userText: string): Promise<R
   const groqKey = typeof import.meta !== 'undefined' && import.meta.env?.VITE_GROQ_API_KEY
   if (!groqKey) return null
 
-  const models = [GROQ_MODEL, GROQ_FALLBACK_MODEL]
+  const models = [GROQ_MODEL, ...GROQ_FALLBACK_MODELS]
 
   for (const model of models) {
     try {
+      const isGptOss = model.startsWith('openai/')
+      const requestPayload: Record<string, unknown> = {
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userText.trim() },
+        ],
+        temperature: 1,
+        top_p: 1,
+        max_completion_tokens: 2048,
+        response_format: { type: 'json_object' },
+      }
+
+      if (isGptOss) {
+        requestPayload.reasoning_effort = 'medium'
+      }
+
       const res = await fetch(GROQ_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${groqKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userText.trim() },
-          ],
-          temperature: 0.1,
-          max_tokens: 600,
-          response_format: { type: 'json_object' },
-        }),
+        body: JSON.stringify(requestPayload),
       })
 
       if (!res.ok) {
-        console.warn(`[voice] Groq API (${model}) returned status:`, res.status)
+        // Retry with max_tokens if max_completion_tokens or reasoning_effort is unsupported by that specific model
+        const fallbackRes = await fetch(GROQ_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${groqKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userText.trim() },
+            ],
+            temperature: 1,
+            max_tokens: 2048,
+            response_format: { type: 'json_object' },
+          }),
+        })
+
+        if (!fallbackRes.ok) {
+          console.warn(`[voice] Groq API (${model}) returned status:`, fallbackRes.status)
+          continue
+        }
+
+        const fallbackData = await fallbackRes.json()
+        const content = fallbackData?.choices?.[0]?.message?.content
+        if (content) {
+          const parsed = extractAndParseJSON(content)
+          if (parsed) return parsed
+        }
         continue
       }
 

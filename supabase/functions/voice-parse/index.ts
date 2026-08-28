@@ -9,7 +9,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const MODEL = 'llama-3.1-8b-instant'
+const MODEL = 'openai/gpt-oss-20b'
+const FALLBACK_MODEL = 'llama-3.3-70b-versatile'
 
 const PRODUCT_SYSTEM_PROMPT = `You are an assistant for a Bangladeshi grocery shop (মুদি দোকান).
 
@@ -105,8 +106,10 @@ serve(async (req: Request) => {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: transcript.trim() },
         ],
-        temperature: 0.1,
-        max_tokens: 200,
+        temperature: 1,
+        max_completion_tokens: 2048,
+        top_p: 1,
+        reasoning_effort: 'medium',
         response_format: { type: 'json_object' },
       }),
     })

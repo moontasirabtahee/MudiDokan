@@ -117,6 +117,25 @@ export default function Products() {
         className="mt-3"
       />
 
+      {can('manager') && counts.low > 0 && tab === 'low' && (
+        <div className="mt-2.5 p-3 rounded-card bg-brand-soft border border-brand/20 flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-2">
+            <Icon name="truck" size="sm" className="text-brand shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-ink">মহাজন থেকে মাল তুলবেন?</p>
+              <p className="text-[11px] text-ink-soft">কম থাকা পণ্যের জন্য চালান লিখুন — স্টক বাড়বে</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => navigate('/purchases/new')}
+          >
+            চালান লিখুন
+          </Button>
+        </div>
+      )}
+
       <p className="text-ink-faint mt-3 px-1 text-xs">
         {t('product.count', { count: rows.length })}
       </p>

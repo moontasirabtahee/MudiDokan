@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { Screen } from '@/components/layout/AppShell'
 import { Button, Fab } from '@/components/ui/Button'
 import { Badge, EmptyState, ErrorState, SkeletonRows } from '@/components/ui/Feedback'
+import { Icon } from '@/components/ui/Icon'
 import { listPurchases } from '@/data/transactions'
 import { useQueryList } from '@/hooks/useQuery'
 import { useI18n } from '@/i18n/I18nProvider'
@@ -35,7 +36,12 @@ export default function Purchases() {
         ) : undefined
       }
     >
-      <div className="mt-1">
+      <div className="bg-canvas border border-rule text-xs text-ink-soft px-3 py-2.5 rounded-card mt-1 mb-3 flex items-center gap-2">
+        <Icon name="truck" size="sm" className="text-brand shrink-0" />
+        <span>মহাজন বা ডিলার থেকে পাইকারি পণ্য কিনলে চালানের হিসাব লিখুন — স্টক বৃদ্ধি পাবে ও দেনা হিসাব থাকবে।</span>
+      </div>
+
+      <div>
         {purchases.loading && purchases.rows.length === 0 ? (
           <SkeletonRows rows={4} />
         ) : purchases.error ? (

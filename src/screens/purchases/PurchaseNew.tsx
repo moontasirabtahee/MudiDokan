@@ -16,6 +16,9 @@ import { ROUTES, detailPath } from '@/lib/constants'
 import type { CreatePurchasePayload, ProductStatus, PurchaseItemInput, PurchaseResult } from '@/lib/database.types'
 import { newId } from '@/lib/utils'
 import { useShop } from '@/providers/ShopProvider'
+import { Icon } from '@/components/ui/Icon'
+import { VoiceProductCreateModal } from '@/components/voice/VoiceProductCreateModal'
+
 
 interface PurchaseLine {
   product: ProductStatus
@@ -33,6 +36,7 @@ export default function PurchaseNew() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [productPickerOpen, setProductPickerOpen] = useState(false)
   const [productQuery, setProductQuery] = useState('')
+  const [voiceCreateOpen, setVoiceCreateOpen] = useState(false)
 
   const [lines, setLines] = useState<PurchaseLine[]>([])
   const [paid, setPaid] = useState<number | null>(null)
@@ -276,33 +280,75 @@ export default function PurchaseNew() {
         onClose={() => setProductPickerOpen(false)}
         title={t('product.title')}
       >
-        <SearchInput
-          value={productQuery}
-          onChange={setProductQuery}
-          placeholder={t('common.searchPlaceholder')}
-          autoFocus
-        />
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <SearchInput
+              value={productQuery}
+              onChange={setProductQuery}
+              placeholder={t('common.searchPlaceholder')}
+              autoFocus
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setVoiceCreateOpen(true)}
+            title="মুখে বলে নতুন পণ্য যোগ করুন"
+            className="flex h-11 items-center gap-1.5 px-3 rounded-card border border-brand/30 bg-brand-soft text-brand-deep hover:bg-brand/15 text-xs font-bold transition-all shrink-0 shadow-2xs"
+          >
+            <Icon name="mic" size={17} className="text-brand" />
+            <span>নতুন পণ্য</span>
+          </button>
+        </div>
 
-        <ul className="mt-3 divide-y divide-rule/60 max-h-[60vh] overflow-y-auto">
-          {searchResults.map((p) => (
-            <li
-              key={p.id}
-              onClick={() => addProduct(p)}
-              className="p-3 flex items-center justify-between hover:bg-canvas/60 cursor-pointer"
+        {searchResults.length === 0 ? (
+          <div className="mt-4 p-4 rounded-card bg-canvas border border-rule text-center space-y-3">
+            <p className="text-sm text-ink font-semibold">
+              {productQuery ? `“${productQuery}” নামে কোনো পণ্য পাওয়া যায়নি` : 'কোনো পণ্য নেই'}
+            </p>
+            <p className="text-xs text-ink-soft">
+              মহাজনের চালান থেকে এই নতুন পণ্যটি দোকানে এখনই যোগ করতে চান?
+            </p>
+            <Button
+              variant="primary"
+              size="sm"
+              icon="plus"
+              onClick={() => setVoiceCreateOpen(true)}
             >
-              <div>
-                <p className="font-semibold text-sm text-ink">{p.name_bn || p.name}</p>
-                <p className="text-xs text-ink-faint">
-                  {t('product.buyPrice')}: {money(p.buy_price)} • {t('product.stock')}: {fmtQty(p.stock, p.unit)}
-                </p>
-              </div>
-              <Button size="sm" variant="ghost">
-                +
-              </Button>
-            </li>
-          ))}
-        </ul>
+              নতুন পণ্য তৈরি করুন
+            </Button>
+          </div>
+        ) : (
+          <ul className="mt-3 divide-y divide-rule/60 max-h-[60vh] overflow-y-auto">
+            {searchResults.map((p) => (
+              <li
+                key={p.id}
+                onClick={() => addProduct(p)}
+                className="p-3 flex items-center justify-between hover:bg-canvas/60 cursor-pointer transition-colors"
+              >
+                <div>
+                  <p className="font-semibold text-sm text-ink">{p.name_bn || p.name}</p>
+                  <p className="text-xs text-ink-faint">
+                    {t('product.buyPrice')}: {money(p.buy_price)} • {t('product.stock')}: {fmtQty(p.stock, p.unit)}
+                  </p>
+                </div>
+                <Button size="sm" variant="ghost">
+                  + যোগ
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Sheet>
+
+      {/* Voice / Quick Product Creator inside Purchase flow */}
+      <VoiceProductCreateModal
+        open={voiceCreateOpen}
+        onClose={() => setVoiceCreateOpen(false)}
+        onCreated={() => {
+          void catalog.refetch()
+        }}
+      />
     </Screen>
   )
 }
+

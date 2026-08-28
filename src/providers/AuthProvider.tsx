@@ -75,28 +75,40 @@ const AuthContext = createContext<AuthValue | null>(null)
  * be the thing that offers the language toggle.
  */
 function authError(error: unknown): AppError {
-  const candidate = error as { message?: unknown; status?: unknown; code?: unknown } | null
-  const message = typeof candidate?.message === 'string' ? candidate.message.toLowerCase() : ''
-  const code = typeof candidate?.code === 'string' ? candidate.code : ''
+  const candidate = error as { message?: unknown; status?: unknown; code?: unknown; error_description?: unknown } | null
+  const message = (
+    typeof candidate?.message === 'string'
+      ? candidate.message
+      : typeof candidate?.error_description === 'string'
+        ? candidate.error_description
+        : ''
+  ).toLowerCase()
+  const code = typeof candidate?.code === 'string' ? candidate.code.toLowerCase() : ''
   const status = typeof candidate?.status === 'number' ? candidate.status : 0
 
   const said = (key: StringKey) => new AppError('validation', key)
 
-  if (code === 'invalid_credentials' || message.includes('invalid login credentials')) {
+  if (
+    code === 'invalid_credentials' ||
+    code === 'invalid_grant' ||
+    message.includes('invalid login credentials') ||
+    message.includes('invalid credentials') ||
+    message.includes('invalid grant') ||
+    message.includes('user not found') ||
+    message.includes('wrong password')
+  ) {
     return said('auth.wrongCredentials')
   }
-  if (code === 'user_already_exists' || message.includes('already registered')) {
+  if (code === 'user_already_exists' || message.includes('already registered') || message.includes('already exists')) {
     return said('auth.emailTaken')
   }
-  if (code === 'weak_password' || message.includes('password should be at least')) {
+  if (code === 'weak_password' || message.includes('password should be at least') || message.includes('weak password')) {
     return said('auth.weakPassword')
   }
-  if (code === 'email_not_confirmed' || message.includes('email not confirmed')) {
+  if (code === 'email_not_confirmed' || message.includes('email not confirmed') || message.includes('not confirmed')) {
     return said('auth.confirmEmail')
   }
-  // 429 is the built-in rate limit. Retryable in principle, but not on the
-  // timescale of somebody jabbing at a login button.
-  if (status === 429 || message.includes('rate limit') || message.includes('too many')) {
+  if (status === 429 || message.includes('rate limit') || message.includes('too many requests')) {
     return said('auth.tooManyTries')
   }
   return toAppError(error)

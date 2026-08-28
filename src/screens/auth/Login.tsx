@@ -138,6 +138,21 @@ export default function Login() {
         <Button type="button" variant="ghost" block onClick={() => void onForgot()}>
           {t('auth.forgot')}
         </Button>
+
+        <div className="pt-2 border-t border-rule">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            block
+            onClick={() => {
+              setEmail('demo@mudidokan.app')
+              setPassword('mudidokan')
+            }}
+          >
+            ডেমো অ্যাকাউন্ট পূরণ করুন (demo@mudidokan.app)
+          </Button>
+        </div>
       </form>
     </AuthLayout>
   )

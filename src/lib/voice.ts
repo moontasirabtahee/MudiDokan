@@ -46,8 +46,46 @@ export interface CatalogProductSummary {
 }
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
+const GROQ_WHISPER_URL = 'https://api.groq.com/openai/v1/audio/transcriptions'
 const GROQ_MODEL = 'openai/gpt-oss-20b'
 const GROQ_FALLBACK_MODELS = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'qwen/qwen3.6-27b']
+const GROQ_WHISPER_MODEL = 'whisper-large-v3-turbo'
+
+/**
+ * Transcribes microphone audio recording directly to text using Groq's high-speed Whisper AI.
+ */
+export async function transcribeAudioWithWhisper(blob: Blob): Promise<string | null> {
+  const groqKey = typeof import.meta !== 'undefined' && import.meta.env?.VITE_GROQ_API_KEY
+  if (!groqKey) return null
+
+  try {
+    const formData = new FormData()
+    formData.append('file', blob, 'recording.webm')
+    formData.append('model', GROQ_WHISPER_MODEL)
+    formData.append('language', 'bn')
+    formData.append('response_format', 'json')
+    formData.append('temperature', '0')
+
+    const res = await fetch(GROQ_WHISPER_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${groqKey}`,
+      },
+      body: formData,
+    })
+
+    if (!res.ok) {
+      console.warn('[voice] Whisper API returned status:', res.status)
+      return null
+    }
+
+    const data = await res.json()
+    return typeof data?.text === 'string' ? data.text.trim() : null
+  } catch (err) {
+    console.warn('[voice] Whisper audio transcription threw:', err)
+    return null
+  }
+}
 
 /* ── System Prompts ───────────────────────────────────────────────────────── */
 

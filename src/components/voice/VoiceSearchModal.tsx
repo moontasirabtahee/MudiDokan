@@ -126,8 +126,8 @@ export function VoiceSearchModal({
   const foundCount = matchedItems.filter((m) => m.product !== null).length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-fade-in">
-      <div className="card w-full max-w-md overflow-hidden bg-surface shadow-lift border border-rule p-5 space-y-4 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 p-0 sm:p-4 animate-fade-in">
+      <div className="card w-full max-w-md overflow-hidden bg-surface shadow-lift border border-rule p-5 space-y-4 max-h-[92dvh] flex flex-col rounded-t-2xl sm:rounded-card pb-safe sm:pb-5">
         {/* Header */}
         <div className="flex items-center justify-between pb-2 border-b border-rule">
           <div className="flex items-center gap-2">
@@ -207,19 +207,19 @@ export function VoiceSearchModal({
                       : 'bg-canvas border-rule'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span
-                      className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                         m.product ? 'bg-ok text-white' : 'bg-rule text-ink-soft'
                       }`}
                     >
                       {m.product ? <Icon name="check" size={14} /> : idx + 1}
                     </span>
-                    <div>
-                      <p className="text-sm font-bold text-ink">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-ink truncate">
                         {m.product ? (m.product.name_bn || m.product.name) : (m.parsed.name_bn || m.parsed.name)}
                       </p>
-                      <p className="text-xs text-ink-soft">
+                      <p className="text-xs text-ink-soft truncate">
                         পরিমাণ: <span className="font-semibold text-brand">{m.quantity} {m.parsed.unit || m.product?.unit || 'পিস'}</span>
                         {m.product ? ` · ৳${m.product.sell_price}/একক` : ' (দোকানে পাওয়া যায়নি)'}
                       </p>
@@ -230,7 +230,7 @@ export function VoiceSearchModal({
                     <button
                       type="button"
                       onClick={() => handleAddSingle(m)}
-                      className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-brand text-white hover:bg-brand-deep shadow-2xs"
+                      className="px-3.5 py-2 min-h-[44px] text-xs font-semibold rounded-lg bg-brand text-white hover:bg-brand-deep shadow-2xs shrink-0 active:scale-95 transition-all"
                     >
                       + যোগ
                     </button>
@@ -243,18 +243,19 @@ export function VoiceSearchModal({
 
         {/* Action Buttons */}
         <div className="flex gap-2.5 pt-2 border-t border-rule">
-          <Button variant="outline" className="flex-1" onClick={onClose}>
+          <Button variant="outline" size="lg" className="flex-1" onClick={onClose}>
             বাতিল
           </Button>
           <Button
             variant="primary"
+            size="lg"
             className="flex-1"
             disabled={!voice.transcript && matchedItems.length === 0}
             icon="check"
             onClick={handleAddAll}
           >
             {foundCount > 0
-              ? `সবগুলো কার্টে যোগ করুন (${foundCount})`
+              ? `যোগ করুন (${foundCount})`
               : 'খুঁজুন'}
           </Button>
         </div>

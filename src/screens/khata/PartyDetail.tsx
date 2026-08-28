@@ -203,13 +203,13 @@ export default function PartyDetail() {
           </div>
 
           {customer.phone ? (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
               <a
                 href={`tel:${customer.phone}`}
                 title="কল করুন"
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-pill bg-brand-soft text-brand text-xs font-semibold hover:bg-brand/20 transition-all"
+                className="inline-flex min-h-[36px] items-center gap-1 px-3 py-1.5 rounded-pill bg-brand-soft text-brand text-xs font-bold hover:bg-brand/20 active:scale-95 transition-all"
               >
-                <Icon name="phone" size={13} />
+                <Icon name="phone" size={14} />
                 <span>কল</span>
               </a>
               {due > 0 && (
@@ -228,9 +228,9 @@ export default function PartyDetail() {
                     target="_blank"
                     rel="noopener noreferrer"
                     title="হোয়াটসঅ্যাপে তাগাদা"
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-pill bg-[#25D366]/15 text-[#128C7E] text-xs font-semibold hover:bg-[#25D366]/25 transition-all"
+                    className="inline-flex min-h-[36px] items-center gap-1 px-3 py-1.5 rounded-pill bg-[#25D366]/15 text-[#128C7E] text-xs font-bold hover:bg-[#25D366]/25 active:scale-95 transition-all"
                   >
-                    <Icon name="whatsapp" size={13} />
+                    <Icon name="whatsapp" size={14} />
                     <span>হোয়াটসঅ্যাপ</span>
                   </a>
                   <a
@@ -245,7 +245,7 @@ export default function PartyDetail() {
                       ) ?? '#'
                     }
                     title="মেসেজে তাগাদা"
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-pill bg-canvas border border-rule text-ink-soft text-xs font-semibold hover:bg-brand-soft hover:text-brand transition-all"
+                    className="inline-flex min-h-[36px] items-center gap-1 px-3 py-1.5 rounded-pill bg-canvas border border-rule text-ink-soft text-xs font-bold hover:bg-brand-soft hover:text-brand active:scale-95 transition-all"
                   >
                     <span>✉️</span>
                     <span>এসএমএস</span>
@@ -401,11 +401,11 @@ export default function PartyDetail() {
                         </span>
                       </div>
 
-                      <div className="mt-1 flex items-center justify-between text-xs text-ink-soft">
-                        <span>
+                      <div className="mt-1 flex items-center justify-between gap-2 text-xs text-ink-soft">
+                        <span className="truncate min-w-0 flex-1">
                           {entry.note || (entry.entry_type === 'payment_received' ? t('common.saved') : '')}
                         </span>
-                        <span className="tnum">
+                        <span className="tnum shrink-0">
                           {t('stock.balanceAfter')}: {money(entry.balance_after)}
                         </span>
                       </div>
@@ -428,9 +428,9 @@ export default function PartyDetail() {
             ) : (
               <ul className="divide-y divide-rule/60">
                 {salesQuery.rows.map((sale) => (
-                  <li key={sale.id} className="p-3 flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-sm text-ink">
+                  <li key={sale.id} className="p-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm text-ink truncate">
                         {t('sell.invoiceNo', { no: num(sale.invoice_no) })}
                       </p>
                       <p className="text-xs text-ink-faint">
@@ -438,7 +438,7 @@ export default function PartyDetail() {
                       </p>
                     </div>
 
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <p className="tnum font-bold text-sm text-ink">{money(sale.total)}</p>
                       {sale.due > 0 ? (
                         <p className="text-xs text-warn">{t('khata.due')}: {money(sale.due)}</p>

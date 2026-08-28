@@ -133,8 +133,8 @@ export function BarcodeScannerModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-fade-in">
-      <div className="card w-full max-w-sm overflow-hidden bg-surface shadow-lift border border-rule">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 p-0 sm:p-4 animate-fade-in">
+      <div className="card w-full max-w-sm overflow-hidden bg-surface shadow-lift border border-rule rounded-t-2xl sm:rounded-card pb-safe sm:pb-0">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-rule p-3.5">
           <div className="flex items-center gap-2">

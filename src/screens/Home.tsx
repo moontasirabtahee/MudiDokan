@@ -158,7 +158,7 @@ export default function Home() {
           <button
             type="button"
             onClick={() => setClosingOpen(true)}
-            className="w-full flex items-center justify-between p-3 rounded-card bg-surface border border-rule hover:bg-canvas shadow-sm transition-all text-start"
+            className="w-full min-h-[56px] flex items-center justify-between p-3.5 rounded-card bg-surface border border-rule hover:bg-canvas shadow-sm transition-all text-start active:scale-[0.99]"
           >
             <div className="flex items-center gap-2.5">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft text-brand">

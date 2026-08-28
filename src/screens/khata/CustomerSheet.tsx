@@ -143,6 +143,7 @@ export function CustomerSheet({
             aria-describedby={describedBy}
             invalid={invalid}
             type="tel"
+            inputMode="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="017XXXXXXXX"

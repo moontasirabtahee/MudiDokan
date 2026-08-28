@@ -94,9 +94,9 @@ export default function Products() {
             type="button"
             onClick={() => setVoiceAddOpen(true)}
             title="মুখে বলে দ্রুত পণ্য যোগ করুন"
-            className="flex h-11 items-center gap-1.5 px-3 rounded-card border border-brand/30 bg-brand-soft text-brand-deep hover:bg-brand/15 text-xs font-bold transition-all shrink-0 shadow-2xs"
+            className="flex h-12 min-h-[48px] items-center gap-1.5 px-3.5 rounded-card border border-brand/30 bg-brand-soft text-brand-deep hover:bg-brand/15 text-xs font-bold transition-all shrink-0 shadow-2xs active:scale-[0.98]"
           >
-            <Icon name="mic" size={17} className="text-brand" />
+            <Icon name="mic" size={18} className="text-brand" />
             <span>মুখে বলে যোগ</span>
           </button>
         )}

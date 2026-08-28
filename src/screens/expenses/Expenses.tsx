@@ -103,18 +103,18 @@ export default function Expenses() {
             {expenses.rows.map((e) => {
               const cat = EXPENSE_CATEGORIES[e.category]
               return (
-                <li key={e.id} className="p-3.5 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">{cat?.icon || '•'}</span>
-                    <div>
-                      <p className="font-semibold text-sm text-ink">
+                <li key={e.id} className="p-3.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <span className="text-xl shrink-0">{cat?.icon || '•'}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm text-ink truncate">
                         {cat ? cat[locale] : e.category}
                       </p>
-                      {e.note ? <p className="text-xs text-ink-faint">{e.note}</p> : null}
+                      {e.note ? <p className="text-xs text-ink-faint truncate">{e.note}</p> : null}
                     </div>
                   </div>
 
-                  <p className="tnum font-bold text-base text-ink">{money(e.amount)}</p>
+                  <p className="tnum font-bold text-base text-ink shrink-0">{money(e.amount)}</p>
                 </li>
               )
             })}

@@ -99,7 +99,7 @@ export default function SupplierDetail() {
           {supplier.phone ? (
             <a
               href={`tel:${supplier.phone}`}
-              className="text-brand font-semibold hover:underline"
+              className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-brand-soft text-brand font-bold hover:bg-brand/20 active:scale-95 transition-all text-xs"
             >
               📞 {supplier.phone}
             </a>
@@ -159,9 +159,9 @@ export default function SupplierDetail() {
                       </span>
                     </div>
 
-                    <div className="mt-1 flex items-center justify-between text-xs text-ink-soft">
-                      <span>{entry.note || ''}</span>
-                      <span className="tnum">
+                    <div className="mt-1 flex items-center justify-between gap-2 text-xs text-ink-soft">
+                      <span className="truncate min-w-0 flex-1">{entry.note || ''}</span>
+                      <span className="tnum shrink-0">
                         {t('stock.balanceAfter')}: {money(entry.balance_after)}
                       </span>
                     </div>

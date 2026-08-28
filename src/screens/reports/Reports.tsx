@@ -245,16 +245,16 @@ export default function Reports() {
           ) : (
             <ul className="divide-y divide-rule/60 card overflow-hidden">
               {productRows.map((p) => (
-                <li key={p.product_id ?? p.product_name} className="p-3.5 flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-sm text-ink">{p.product_name}</p>
-                    <p className="text-xs text-ink-faint">
+                <li key={p.product_id ?? p.product_name} className="p-3.5 flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-sm text-ink truncate">{p.product_name}</p>
+                    <p className="text-xs text-ink-faint truncate">
                       {t('report.qtySold')}: {num(p.qty_sold)} • {t('report.revenue')}: {money(p.revenue)}
                     </p>
                   </div>
 
                   {isManager ? (
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <p className="tnum font-bold text-sm text-brand">{money(p.profit)}</p>
                       {p.margin_pct != null ? (
                         <p className="text-xs text-ink-faint">{num(Math.round(p.margin_pct))}%</p>

@@ -66,19 +66,19 @@ export default function Purchases() {
               <li
                 key={p.id}
                 onClick={() => navigate(detailPath('purchase', p.id))}
-                className="p-3.5 flex items-center justify-between hover:bg-canvas/50 cursor-pointer transition-colors"
+                className="p-3.5 flex items-center justify-between hover:bg-canvas/50 cursor-pointer transition-colors gap-3"
               >
-                <div>
-                  <p className="font-semibold text-sm text-ink">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-sm text-ink truncate">
                     {t('sell.invoiceNo', { no: num(p.invoice_no) })}
                   </p>
-                  <p className="text-xs text-ink-faint">
+                  <p className="text-xs text-ink-faint truncate">
                     {date(p.purchased_at, { short: true })}
                     {p.supplier_ref ? ` • ${p.supplier_ref}` : ''}
                   </p>
                 </div>
 
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <p className="tnum font-bold text-sm text-ink">{money(p.total)}</p>
                   {p.due > 0 ? (
                     <Badge tone="warn">{t('khata.due')}: {money(p.due)}</Badge>

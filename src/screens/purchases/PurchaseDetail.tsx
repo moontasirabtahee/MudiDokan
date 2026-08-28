@@ -69,16 +69,16 @@ export default function PurchaseDetail() {
         <h3 className="font-semibold text-sm text-ink mb-2">{t('nav.products')}</h3>
         <ul className="divide-y divide-rule/60">
           {purchase.items.map((item) => (
-            <li key={item.id} className="py-2 flex items-center justify-between text-sm">
-              <div>
-                <p className="font-medium text-ink">
+            <li key={item.id} className="py-2.5 flex items-center justify-between text-sm gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-ink truncate">
                   {item.product?.name_bn || item.product?.name || '—'}
                 </p>
-                <p className="text-xs text-ink-faint">
+                <p className="text-xs text-ink-faint truncate">
                   {fmtQty(item.qty, item.unit)} × {money(item.unit_cost)}
                 </p>
               </div>
-              <p className="tnum font-semibold text-ink">{money(item.line_total)}</p>
+              <p className="tnum font-semibold text-ink shrink-0">{money(item.line_total)}</p>
             </li>
           ))}
         </ul>

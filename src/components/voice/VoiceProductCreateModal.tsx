@@ -151,8 +151,8 @@ export function VoiceProductCreateModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-fade-in">
-      <div className="card w-full max-w-md overflow-hidden bg-surface shadow-lift border border-rule p-5 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 p-0 sm:p-4 animate-fade-in">
+      <div className="card w-full max-w-md overflow-y-auto max-h-[92dvh] bg-surface shadow-lift border border-rule p-5 space-y-4 rounded-t-2xl sm:rounded-card pb-safe sm:pb-5">
         {/* Header */}
         <div className="flex items-center justify-between pb-2 border-b border-rule">
           <div className="flex items-center gap-2">

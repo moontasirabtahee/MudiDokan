@@ -340,6 +340,9 @@ export default function Staff() {
                   {({ id: phoneId }) => (
                     <Input
                       id={phoneId}
+                      type="text"
+                      inputMode="tel"
+                      autoComplete="tel"
                       value={staffPhoneOrEmail}
                       onChange={(e) => setStaffPhoneOrEmail(e.target.value)}
                       placeholder="যেমন: 01711223344 বা helper@gmail.com"
@@ -352,6 +355,8 @@ export default function Staff() {
                     <Input
                       id={passId}
                       type="text"
+                      inputMode="numeric"
+                      autoComplete="new-password"
                       value={staffPassword}
                       onChange={(e) => setStaffPassword(e.target.value)}
                       placeholder="যেমন: 123456"

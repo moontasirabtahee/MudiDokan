@@ -155,7 +155,7 @@ export default function Khata() {
           onClick={() => voice.toggle()}
           title="মুখে বলে কাস্টমার খুঁজুন"
           className={cn(
-            'flex h-11 w-11 shrink-0 items-center justify-center rounded-card border shadow-xs transition-all',
+            'flex h-12 w-12 min-h-[48px] min-w-[48px] shrink-0 items-center justify-center rounded-card border shadow-xs transition-all active:scale-95',
             voice.isListening
               ? 'bg-brand text-white border-brand scale-105 animate-pulse'
               : 'bg-surface border-rule text-brand hover:bg-brand-soft',
@@ -282,7 +282,7 @@ export default function Khata() {
                             e.stopPropagation()
                             setCollectCustomer(c)
                           }}
-                          className="px-3 py-1.5 text-xs font-bold rounded-lg bg-warn text-white hover:bg-warn/90 active:scale-95 transition-all shadow-2xs"
+                          className="px-3.5 py-2 min-h-[44px] text-xs font-bold rounded-lg bg-warn text-white hover:bg-warn/90 active:scale-95 transition-all shadow-2xs shrink-0 flex items-center justify-center"
                         >
                           {t('khata.collect')}
                         </button>

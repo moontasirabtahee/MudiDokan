@@ -240,17 +240,17 @@ export default function Sell() {
           type="button"
           onClick={() => setBarcodeOpen(true)}
           title="ক্যামেরা বারকোড স্ক্যানার"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-card border border-rule bg-surface text-brand hover:bg-brand-soft shadow-sm transition-all"
+          className="flex h-12 w-12 min-h-[48px] min-w-[48px] shrink-0 items-center justify-center rounded-card border border-rule bg-surface text-brand hover:bg-brand-soft shadow-sm transition-all active:scale-95"
         >
-          <Icon name="barcode" size={20} />
+          <Icon name="barcode" size={22} />
         </button>
         <button
           type="button"
           onClick={() => setVoiceOpen(true)}
           title="মুখে বলে পণ্য খুঁজুন"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-card border border-rule bg-surface text-brand hover:bg-brand-soft shadow-sm transition-all"
+          className="flex h-12 w-12 min-h-[48px] min-w-[48px] shrink-0 items-center justify-center rounded-card border border-rule bg-surface text-brand hover:bg-brand-soft shadow-sm transition-all active:scale-95"
         >
-          <Icon name="mic" size={20} />
+          <Icon name="mic" size={22} />
         </button>
       </div>
 
@@ -259,25 +259,25 @@ export default function Sell() {
         <button
           type="button"
           onClick={() => setBarcodeOpen(true)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-surface border border-rule text-xs font-semibold text-ink-soft hover:bg-brand-soft hover:text-brand hover:border-brand/30 transition-all shadow-2xs"
+          className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-surface border border-rule text-xs font-semibold text-ink-soft hover:bg-brand-soft hover:text-brand hover:border-brand/30 transition-all shadow-2xs active:scale-[0.98]"
         >
-          <Icon name="barcode" size={15} className="text-brand" />
+          <Icon name="barcode" size={16} className="text-brand" />
           <span>বারকোড স্ক্যান</span>
         </button>
         <button
           type="button"
           onClick={() => setVoiceOpen(true)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-surface border border-rule text-xs font-semibold text-ink-soft hover:bg-brand-soft hover:text-brand hover:border-brand/30 transition-all shadow-2xs"
+          className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-surface border border-rule text-xs font-semibold text-ink-soft hover:bg-brand-soft hover:text-brand hover:border-brand/30 transition-all shadow-2xs active:scale-[0.98]"
         >
-          <Icon name="mic" size={15} className="text-brand" />
+          <Icon name="mic" size={16} className="text-brand" />
           <span>মুখে বলুন</span>
         </button>
         <button
           type="button"
           onClick={() => setCustomOpen(true)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-surface border border-rule text-xs font-semibold text-ink-soft hover:bg-brand-soft hover:text-brand hover:border-brand/30 transition-all shadow-2xs"
+          className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-surface border border-rule text-xs font-semibold text-ink-soft hover:bg-brand-soft hover:text-brand hover:border-brand/30 transition-all shadow-2xs active:scale-[0.98]"
         >
-          <Icon name="plus" size={15} className="text-brand" />
+          <Icon name="plus" size={16} className="text-brand" />
           <span>নতুন আইটেম</span>
         </button>
       </div>
@@ -480,7 +480,7 @@ function CartRow({
           type="button"
           onClick={() => dispatch({ type: 'remove', key: line.key })}
           aria-label={t('common.delete')}
-          className="text-ink-faint -me-1 flex h-9 w-9 shrink-0 items-center justify-center"
+          className="text-ink-faint -me-1 flex h-11 w-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg hover:bg-danger-soft hover:text-danger active:scale-95 transition-all"
         >
           <Icon name="close" size="sm" />
         </button>

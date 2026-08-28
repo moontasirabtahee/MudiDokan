@@ -64,6 +64,34 @@ Output: {"productName":"ডাল","productName_bn":"ডাল","quantity":0.5,"
 Input: "এক ডজন ডিম নেব"
 Output: {"productName":"ডিম","productName_bn":"ডিম","quantity":1,"unit":"dozen"}`
 
+function extractAndParseJSON(raw: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    // Strip markdown code blocks if wrapped by model
+    const codeBlock = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
+    if (codeBlock && codeBlock[1]) {
+      try {
+        return JSON.parse(codeBlock[1].trim())
+      } catch {
+        // continue
+      }
+    }
+
+    // Extract between outermost { and }
+    const firstBrace = raw.indexOf('{')
+    const lastBrace = raw.lastIndexOf('}')
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        return JSON.parse(raw.slice(firstBrace, lastBrace + 1))
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return null
+}
+
 async function callGroqDirect(systemPrompt: string, userText: string): Promise<Record<string, unknown> | null> {
   const groqKey = typeof import.meta !== 'undefined' && import.meta.env?.VITE_GROQ_API_KEY
   if (!groqKey) return null
@@ -82,7 +110,7 @@ async function callGroqDirect(systemPrompt: string, userText: string): Promise<R
           { role: 'user', content: userText.trim() },
         ],
         temperature: 0.1,
-        max_tokens: 200,
+        max_tokens: 250,
         response_format: { type: 'json_object' },
       }),
     })
@@ -95,7 +123,7 @@ async function callGroqDirect(systemPrompt: string, userText: string): Promise<R
     const data = await res.json()
     const content = data?.choices?.[0]?.message?.content
     if (!content) return null
-    return JSON.parse(content)
+    return extractAndParseJSON(content)
   } catch (err) {
     console.warn('[voice] Direct Groq call failed:', err)
     return null

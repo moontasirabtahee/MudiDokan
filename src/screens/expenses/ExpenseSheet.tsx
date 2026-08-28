@@ -1,13 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Field, Input } from '@/components/ui/Field'
+import { Icon } from '@/components/ui/Icon'
 import { AmountField } from '@/components/ui/NumberField'
 import { Sheet } from '@/components/ui/Sheet'
+import { useVoiceRecognition } from '@/hooks/useVoiceRecognition'
 import { useWrite } from '@/hooks/useWrite'
 import { useI18n } from '@/i18n/I18nProvider'
 import { EXPENSE_CATEGORIES, EXPENSE_ORDER } from '@/lib/constants'
 import type { ExpenseCategory } from '@/lib/database.types'
 import { newId } from '@/lib/utils'
+import { llmParseExpense, parseSpokenExpense } from '@/lib/voice'
 import { useShop } from '@/providers/ShopProvider'
 
 export function ExpenseSheet({
@@ -25,6 +28,43 @@ export function ExpenseSheet({
   const [category, setCategory] = useState<ExpenseCategory>('refreshment')
   const [amount, setAmount] = useState<number | null>(null)
   const [note, setNote] = useState('')
+  const [aiProcessing, setAiProcessing] = useState(false)
+
+  const voice = useVoiceRecognition({
+    lang: 'bn-BD',
+    autoStopMs: 2000,
+    onResult: (spokenText) => {
+      void handleSpokenExpense(spokenText)
+    },
+  })
+
+  useEffect(() => {
+    if (!open) {
+      voice.stop()
+      setAiProcessing(false)
+    }
+  }, [open])
+
+  async function handleSpokenExpense(spoken: string) {
+    if (!spoken.trim()) return
+    setAiProcessing(true)
+
+    // 1. LLM JSON extraction
+    const llmResult = await llmParseExpense(spoken)
+    if (llmResult) {
+      if (llmResult.amount > 0) setAmount(llmResult.amount)
+      if (llmResult.category) setCategory(llmResult.category)
+      if (llmResult.note) setNote(llmResult.note)
+    } else {
+      // 2. Regex fallback
+      const parsed = parseSpokenExpense(spoken)
+      if (parsed.amount > 0) setAmount(parsed.amount)
+      if (parsed.category) setCategory(parsed.category)
+      if (parsed.note) setNote(parsed.note)
+    }
+
+    setAiProcessing(false)
+  }
 
   const expenseWrite = useWrite('create_expense', {
     success: 'expense.saved',
@@ -75,6 +115,40 @@ export function ExpenseSheet({
         </Button>
       }
     >
+      {/* Voice Assistant Strip */}
+      <div className="mb-3 p-3 rounded-card bg-canvas border border-rule flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => voice.toggle()}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all shadow-sm ${
+              voice.isListening
+                ? 'bg-brand text-white scale-105 animate-pulse'
+                : 'bg-surface border border-rule text-brand hover:bg-brand-soft'
+            }`}
+            title="মুখে বলে খরচ পূরণ করুন"
+          >
+            <Icon name={voice.isListening ? 'mic' : 'micOff'} size={20} />
+          </button>
+          <div>
+            <p className="text-xs font-bold text-ink">
+              {voice.isListening ? 'শুনছি... বলুন' : 'মুখে বলে খরচ লিখুন'}
+            </p>
+            <p className="text-[11px] text-ink-soft">
+              {voice.transcript
+                ? `"${voice.transcript}"`
+                : 'যেমন: "দোকান ভাড়া ৫০০০ টাকা" বা "চা নাস্তা ৬০ টাকা"'}
+            </p>
+          </div>
+        </div>
+
+        {aiProcessing && (
+          <span className="text-xs text-brand font-semibold animate-pulse shrink-0">
+            AI বিশ্লেষণ করছে...
+          </span>
+        )}
+      </div>
+
       <Field label={t('common.amount')} required>
         {({ id: amountId, describedBy, invalid }) => (
           <AmountField
@@ -128,3 +202,4 @@ export function ExpenseSheet({
     </Sheet>
   )
 }
+

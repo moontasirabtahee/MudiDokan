@@ -187,6 +187,12 @@ export default function Sell() {
     add(product, quantity > 0 ? quantity : 1)
   }
 
+  function handleVoiceMultipleSelected(items: Array<{ product: ProductStatus; quantity: number }>) {
+    for (const item of items) {
+      add(item.product, item.quantity > 0 ? item.quantity : 1)
+    }
+  }
+
   return (
     <Screen
       title={t('sell.title')}
@@ -288,6 +294,7 @@ export default function Sell() {
         onClose={() => setVoiceOpen(false)}
         products={catalog.rows}
         onSelectProduct={(p, q) => handleVoiceProductSelected(p, q)}
+        onAddMultiple={handleVoiceMultipleSelected}
         onSetSearch={(q) => setQuery(q)}
       />
 

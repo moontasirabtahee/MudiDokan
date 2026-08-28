@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 export interface VoiceRecognitionOptions {
   lang?: string
+  autoStopMs?: number // Automatically stop and trigger onResult after silence (default: 1800ms)
   onResult?: (transcript: string) => void
 }
 
@@ -24,6 +25,7 @@ interface SpeechRecognitionEvent {
 
 export function useVoiceRecognition({
   lang = 'bn-BD',
+  autoStopMs = 2000,
   onResult,
 }: VoiceRecognitionOptions = {}) {
   const [isListening, setIsListening] = useState(false)
@@ -33,10 +35,16 @@ export function useVoiceRecognition({
   const onResultRef = useRef(onResult)
   onResultRef.current = onResult
 
-  // Track whether the user explicitly stopped the mic
   const stoppedManuallyRef = useRef(false)
-  // Accumulate confirmed final text across recognition sessions
   const finalTextRef = useRef('')
+  const silenceTimerRef = useRef<any>(null)
+
+  const fireResult = useCallback((text: string) => {
+    const cleaned = text.trim()
+    if (cleaned && onResultRef.current) {
+      onResultRef.current(cleaned)
+    }
+  }, [])
 
   useEffect(() => {
     const SpeechRecognition =
@@ -45,12 +53,9 @@ export function useVoiceRecognition({
     if (SpeechRecognition) {
       setSupported(true)
       const recognition = new SpeechRecognition()
-      // Keep the microphone open across pauses
       recognition.continuous = true
-      // Show words as they are spoken (not only when final)
       recognition.interimResults = true
       recognition.lang = lang
-      // Give the engine more time to commit a result before timing out
       recognition.maxAlternatives = 1
 
       recognition.onstart = () => {
@@ -76,19 +81,26 @@ export function useVoiceRecognition({
           finalTextRef.current = (finalTextRef.current + ' ' + sessionFinal).trim()
         }
 
-        // Live transcript: show accumulated finals + current interim
         const live = (finalTextRef.current + ' ' + interim).trim()
         setTranscript(live)
+
+        // Reset silence timer on incoming speech
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+        if (autoStopMs > 0 && live) {
+          silenceTimerRef.current = setTimeout(() => {
+            if (!stoppedManuallyRef.current) {
+              fireResult(live)
+            }
+          }, autoStopMs)
+        }
       }
 
       recognition.onerror = (err: any) => {
-        // 'no-speech' is fired after ~8 s silence; just restart automatically
         if (err.error === 'no-speech' && !stoppedManuallyRef.current) {
-          // onend will fire next and we auto-restart there
           return
         }
         if (err.error !== 'aborted') {
-          console.warn('Voice recognition error:', err.error || err)
+          console.warn('[voice] Recognition error:', err.error || err)
         }
         if (err.error !== 'no-speech') {
           setIsListening(false)
@@ -96,18 +108,16 @@ export function useVoiceRecognition({
       }
 
       recognition.onend = () => {
-        // If the user hasn't pressed stop, restart immediately to keep listening
         if (!stoppedManuallyRef.current) {
           try {
             recognition.start()
           } catch {
-            // already starting, ignore
+            // ignore
           }
         } else {
-          // User pressed stop — fire onResult with everything collected
           const full = finalTextRef.current.trim()
-          if (full && onResultRef.current) {
-            onResultRef.current(full)
+          if (full) {
+            fireResult(full)
           }
           setIsListening(false)
         }
@@ -119,6 +129,7 @@ export function useVoiceRecognition({
     }
 
     return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
       if (recognitionRef.current) {
         stoppedManuallyRef.current = true
         try {
@@ -128,7 +139,7 @@ export function useVoiceRecognition({
         }
       }
     }
-  }, [lang])
+  }, [lang, autoStopMs, fireResult])
 
   const start = useCallback(() => {
     if (recognitionRef.current && !isListening) {
@@ -144,6 +155,7 @@ export function useVoiceRecognition({
   }, [isListening])
 
   const stop = useCallback(() => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
     if (recognitionRef.current) {
       stoppedManuallyRef.current = true
       try {
@@ -152,6 +164,12 @@ export function useVoiceRecognition({
         // already stopped
       }
     }
+  }, [])
+
+  const reset = useCallback(() => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+    finalTextRef.current = ''
+    setTranscript('')
   }, [])
 
   const toggle = useCallback(() => {
@@ -168,6 +186,8 @@ export function useVoiceRecognition({
     transcript,
     start,
     stop,
+    reset,
     toggle,
   }
 }
+

@@ -4,13 +4,20 @@ import { Icon } from '@/components/ui/Icon'
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition'
 import type { ProductStatus } from '@/lib/database.types'
 import { matchesSearch } from '@/lib/utils'
-import { llmSearchProduct, parseVoiceQty } from '@/lib/voice'
+import { llmParseSellItems, parseMultiSellItems, type ParsedSellItem } from '@/lib/voice'
+
+export interface MatchedCartItem {
+  parsed: ParsedSellItem
+  product: ProductStatus | null
+  quantity: number
+}
 
 interface VoiceSearchModalProps {
   open: boolean
   onClose: () => void
   products?: ProductStatus[]
   onSelectProduct?: (product: ProductStatus, quantity: number) => void
+  onAddMultiple?: (items: Array<{ product: ProductStatus; quantity: number }>) => void
   onSetSearch?: (query: string) => void
 }
 
@@ -19,14 +26,16 @@ export function VoiceSearchModal({
   onClose,
   products = [],
   onSelectProduct,
+  onAddMultiple,
   onSetSearch,
 }: VoiceSearchModalProps) {
-  const [matchedProduct, setMatchedProduct] = useState<ProductStatus | null>(null)
-  const [matchedQty, setMatchedQty] = useState<number>(1)
+  const [matchedItems, setMatchedItems] = useState<MatchedCartItem[]>([])
   const [aiProcessing, setAiProcessing] = useState(false)
+  const [processedText, setProcessedText] = useState('')
 
   const voice = useVoiceRecognition({
     lang: 'bn-BD',
+    autoStopMs: 2000,
     onResult: (spokenText) => {
       void handleSpoken(spokenText)
     },
@@ -34,8 +43,9 @@ export function VoiceSearchModal({
 
   useEffect(() => {
     if (open) {
-      setMatchedProduct(null)
+      setMatchedItems([])
       setAiProcessing(false)
+      setProcessedText('')
       voice.start()
     } else {
       voice.stop()
@@ -43,136 +53,213 @@ export function VoiceSearchModal({
   }, [open])
 
   async function handleSpoken(spoken: string) {
-    if (!spoken.trim()) return
-
+    if (!spoken.trim() || spoken.trim() === processedText) return
+    setProcessedText(spoken.trim())
     setAiProcessing(true)
 
-    // 1. Try LLM first for intelligent extraction
-    const llmResult = await llmSearchProduct(spoken)
+    // 1. Send local transcript to LLM to extract JSON items list
+    let parsedList = await llmParseSellItems(spoken)
 
-    let searchName: string
-    let qty: number
-
-    if (llmResult && llmResult.productName) {
-      searchName = llmResult.productName_bn || llmResult.productName
-      qty = llmResult.quantity
-    } else {
-      // 2. Fallback to regex qty parser
-      const parsed = parseVoiceQty(spoken)
-      searchName = parsed.cleanName
-      qty = parsed.qty
+    // 2. Fallback to local regex multi-parser if offline
+    if (!parsedList || parsedList.length === 0) {
+      parsedList = parseMultiSellItems(spoken)
     }
 
-    setMatchedQty(qty)
-    setAiProcessing(false)
+    // Match each extracted item against the database products
+    const matches: MatchedCartItem[] = []
 
-    // Search catalog
-    const target = searchName.trim()
-    if (target && products.length > 0) {
-      const found = products.find((p) =>
-        matchesSearch(target, p.name, p.name_bn, p.sku, p.barcode),
-      )
-      if (found) {
-        setMatchedProduct(found)
-        return
+    for (const item of parsedList) {
+      const searchTarget = (item.name_bn || item.name).trim()
+      let found: ProductStatus | null = null
+
+      if (searchTarget && products.length > 0) {
+        found =
+          products.find((p) => matchesSearch(searchTarget, p.name, p.name_bn, p.sku, p.barcode)) ??
+          products.find((p) => {
+            const pName = (p.name_bn || p.name).toLowerCase()
+            const sName = searchTarget.toLowerCase()
+            return pName.includes(sName) || sName.includes(pName)
+          }) ??
+          null
       }
+
+      matches.push({
+        parsed: item,
+        product: found,
+        quantity: item.quantity > 0 ? item.quantity : 1,
+      })
     }
 
-    // No exact match — pass as search query
-    if (onSetSearch && target) {
-      onSetSearch(target)
+    setMatchedItems(matches)
+    setAiProcessing(false)
+  }
+
+  function handleAddAll() {
+    const readyToAdd = matchedItems
+      .filter((m) => m.product !== null)
+      .map((m) => ({ product: m.product!, quantity: m.quantity }))
+
+    if (readyToAdd.length > 0) {
+      if (onAddMultiple) {
+        onAddMultiple(readyToAdd)
+      } else if (onSelectProduct) {
+        for (const item of readyToAdd) {
+          onSelectProduct(item.product, item.quantity)
+        }
+      }
+      onClose()
+    } else if (onSetSearch && voice.transcript) {
+      onSetSearch(voice.transcript)
+      onClose()
     }
   }
 
-  function handleConfirmAdd() {
-    if (matchedProduct && onSelectProduct) {
-      onSelectProduct(matchedProduct, matchedQty)
-      onClose()
-    } else if (onSetSearch && voice.transcript) {
-      const { cleanName } = parseVoiceQty(voice.transcript)
-      onSetSearch(cleanName || voice.transcript)
-      onClose()
+  function handleAddSingle(m: MatchedCartItem) {
+    if (m.product && onSelectProduct) {
+      onSelectProduct(m.product, m.quantity)
+      setMatchedItems((prev) => prev.filter((item) => item !== m))
     }
   }
 
   if (!open) return null
 
+  const foundCount = matchedItems.filter((m) => m.product !== null).length
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 animate-fade-in">
-      <div className="card w-full max-w-sm overflow-hidden bg-surface shadow-lift border border-rule text-center p-6">
-        <div className="flex justify-end -mt-2 -mr-2">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-fade-in">
+      <div className="card w-full max-w-md overflow-hidden bg-surface shadow-lift border border-rule p-5 space-y-4 max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-2 border-b border-rule">
+          <div className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft text-brand">
+              <Icon name="mic" size={20} />
+            </span>
+            <div>
+              <h3 className="font-bold text-base text-ink">মুখে বলে কার্টে যোগ করুন</h3>
+              <p className="text-xs text-ink-soft">এক বা একাধিক পণ্যের নাম ও পরিমাণ বলুন</p>
+            </div>
+          </div>
           <IconButton name="close" label="Close" variant="ghost" onClick={onClose} />
         </div>
 
-        {/* Pulsing Mic Circle */}
-        <div className="relative mx-auto my-4 flex h-24 w-24 items-center justify-center">
-          {voice.isListening && (
-            <>
-              <div className="absolute inset-0 rounded-full bg-brand/20 animate-ping" />
-              <div className="absolute inset-2 rounded-full bg-brand/30 animate-pulse" />
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() => voice.toggle()}
-            className={`relative flex h-20 w-20 items-center justify-center rounded-full shadow-md transition-all ${
-              voice.isListening
-                ? 'bg-brand text-white scale-105'
-                : 'bg-canvas border-2 border-rule text-ink-faint'
-            }`}
-          >
-            <Icon name={voice.isListening ? 'mic' : 'micOff'} size={36} />
-          </button>
+        {/* Mic Pulse Button */}
+        <div className="flex items-center justify-center py-2">
+          <div className="relative flex items-center justify-center">
+            {voice.isListening && (
+              <>
+                <div className="absolute -inset-2 rounded-full bg-brand/20 animate-ping" />
+                <div className="absolute -inset-1 rounded-full bg-brand/30 animate-pulse" />
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => voice.toggle()}
+              className={`relative flex h-16 w-16 items-center justify-center rounded-full shadow-md transition-all ${
+                voice.isListening
+                  ? 'bg-brand text-white scale-105'
+                  : 'bg-canvas border-2 border-rule text-ink-faint'
+              }`}
+            >
+              <Icon name={voice.isListening ? 'mic' : 'micOff'} size={28} />
+            </button>
+          </div>
         </div>
 
-        <h3 className="text-lg font-bold text-ink mb-1">
-          {voice.isListening ? 'কথা বলুন...' : 'মাইক্রোফোনে চাপ দিন'}
-        </h3>
-        <p className="text-xs text-ink-soft mb-4">
-          যেমন: <span className="font-semibold text-brand">"২ কেজি চিনি"</span> বা <span className="font-semibold text-brand">"১ লিটার সয়াবিন তেল"</span>
+        <p className="text-center text-xs text-ink-soft">
+          {voice.isListening ? (
+            <span className="text-brand font-semibold animate-pulse">
+              🎙️ শুনছি... বলুন: "২ কেজি চিনি, ১ লিটার তেল, ১ ডজন ডিম"
+            </span>
+          ) : (
+            <span>মাইক্রোফোনে চাপ দিয়ে কথা বলুন</span>
+          )}
         </p>
 
-        {/* Spoken text display */}
-        <div className="min-h-16 p-3 rounded-lg bg-canvas border border-rule flex flex-col items-center justify-center mb-4 gap-1.5">
-          {voice.transcript ? (
-            <p className="text-base font-semibold text-ink">"{voice.transcript}"</p>
-          ) : (
-            <p className="text-xs text-ink-faint italic">আপনার কথা শোনা হচ্ছে...</p>
-          )}
+        {/* Spoken Text Display */}
+        {(voice.transcript || aiProcessing) && (
+          <div className="p-3 rounded-lg bg-canvas border border-rule text-center space-y-1">
+            {voice.transcript && (
+              <p className="text-sm font-semibold text-ink">"{voice.transcript}"</p>
+            )}
+            {aiProcessing && (
+              <div className="flex items-center justify-center gap-1.5 text-xs text-brand font-semibold animate-pulse">
+                <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                AI তালিকা বিশ্লেষণ করছে...
+              </div>
+            )}
+          </div>
+        )}
 
-          {aiProcessing && (
-            <div className="flex items-center gap-1.5 text-xs text-brand font-semibold animate-pulse">
-              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-              </svg>
-              AI খুঁজছে...
+        {/* Parsed & Matched Items List */}
+        {matchedItems.length > 0 && (
+          <div className="space-y-2 flex-1 overflow-y-auto pr-1">
+            <p className="text-xs font-bold text-ink-soft">চিহ্নিত পণ্য তালিকা ({matchedItems.length}টি):</p>
+            <div className="space-y-2">
+              {matchedItems.map((m, idx) => (
+                <div
+                  key={idx}
+                  className={`flex items-center justify-between p-2.5 rounded-card border ${
+                    m.product
+                      ? 'bg-ok-soft/30 border-ok/30'
+                      : 'bg-canvas border-rule'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                        m.product ? 'bg-ok text-white' : 'bg-rule text-ink-soft'
+                      }`}
+                    >
+                      {m.product ? <Icon name="check" size={14} /> : idx + 1}
+                    </span>
+                    <div>
+                      <p className="text-sm font-bold text-ink">
+                        {m.product ? (m.product.name_bn || m.product.name) : (m.parsed.name_bn || m.parsed.name)}
+                      </p>
+                      <p className="text-xs text-ink-soft">
+                        পরিমাণ: <span className="font-semibold text-brand">{m.quantity} {m.parsed.unit || m.product?.unit || 'পিস'}</span>
+                        {m.product ? ` · ৳${m.product.sell_price}/একক` : ' (দোকানে পাওয়া যায়নি)'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {m.product && (
+                    <button
+                      type="button"
+                      onClick={() => handleAddSingle(m)}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-brand text-white hover:bg-brand-deep shadow-2xs"
+                    >
+                      + যোগ
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {matchedProduct && !aiProcessing && (
-            <div className="mt-1 text-xs text-ok font-semibold bg-ok-soft px-2.5 py-1 rounded-full flex items-center gap-1">
-              <Icon name="check" size={14} />
-              <span>✨ পণ্য পাওয়া গেছে: {matchedProduct.name_bn || matchedProduct.name} ({matchedQty} {matchedProduct.unit})</span>
-            </div>
-          )}
-
-        </div>
-
-        <div className="flex gap-2">
-          <Button variant="outline" block onClick={onClose}>
+        {/* Action Buttons */}
+        <div className="flex gap-2.5 pt-2 border-t border-rule">
+          <Button variant="outline" className="flex-1" onClick={onClose}>
             বাতিল
           </Button>
           <Button
             variant="primary"
-            block
-            disabled={!voice.transcript && !matchedProduct}
-            onClick={handleConfirmAdd}
+            className="flex-1"
+            disabled={!voice.transcript && matchedItems.length === 0}
+            icon="check"
+            onClick={handleAddAll}
           >
-            {matchedProduct ? `কার্টে যোগ করুন (${matchedQty})` : 'খুঁজুন'}
+            {foundCount > 0
+              ? `সবগুলো কার্টে যোগ করুন (${foundCount})`
+              : 'খুঁজুন'}
           </Button>
         </div>
       </div>
     </div>
   )
 }
+

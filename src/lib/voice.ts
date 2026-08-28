@@ -1,4 +1,4 @@
-import type { UnitType } from '@/lib/database.types'
+import type { ExpenseCategory, UnitType } from '@/lib/database.types'
 
 export interface ParsedProduct {
   name: string
@@ -9,66 +9,177 @@ export interface ParsedProduct {
   unit: UnitType
 }
 
+export interface ParsedSellItem {
+  name: string
+  name_bn: string
+  quantity: number
+  unit: string
+}
+
+export interface ParsedExpense {
+  category: ExpenseCategory
+  amount: number
+  note: string
+}
+
+export interface ParsedPurchaseItem {
+  product_name: string
+  qty: number
+  unit: UnitType
+  unit_cost: number
+}
+
+export interface ParsedKhataEntry {
+  party_type: 'customer' | 'supplier'
+  party_name: string
+  amount: number
+  type: 'payment_received' | 'credit_sale' | 'payment_made' | 'credit_purchase'
+}
+
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const GROQ_MODEL = 'llama-3.1-8b-instant'
+const GROQ_MODEL = 'llama-3.3-70b-versatile'
+const GROQ_FALLBACK_MODEL = 'llama-3.1-8b-instant'
 
-const PRODUCT_SYSTEM_PROMPT = `You are an assistant for a Bangladeshi grocery shop (মুদি দোকান).
+/* ── System Prompts ───────────────────────────────────────────────────────── */
 
-The shopkeeper will speak a product definition in Bengali or mixed Bengali-English.
-Extract structured product information and return ONLY valid JSON — no explanation.
+const SELL_CART_SYSTEM_PROMPT = `You are an AI assistant for a Bangladeshi grocery shop (মুদি দোকান).
+The shopkeeper will speak a list of one or more products sold to a customer in Bengali, English, or mixed.
+Extract ALL requested items into a JSON list.
 
-Fields:
-- "name": product name in spoken language
-- "name_bn": product name in Bengali (translate if English)
-- "buyPrice": purchase/cost price as number (কেনা/কেন/কিনে/cost/buy) — null if not mentioned
-- "sellPrice": selling price as number (বেচা/বেঁচে/বিক্রি/sell) — null if not mentioned
-- "stock": opening stock quantity as number (স্টক/আছে/stock) — null if not mentioned
-- "unit": exactly one of: "piece","kg","gram","litre","packet","dozen","hali","sack"
+Output ONLY valid JSON in this exact structure:
+{
+  "items": [
+    {
+      "name": "product name in english/transliteration",
+      "name_bn": "product name in Bengali script",
+      "quantity": number (e.g. 1, 2, 0.5, 1.5),
+      "unit": "kg" | "gram" | "litre" | "packet" | "dozen" | "hali" | "sack" | "piece"
+    }
+  ]
+}
 
-Unit mapping: কেজি/kg→"kg", গ্রাম/gram→"gram", লিটার/litre→"litre", প্যাকেট/packet→"packet", ডজন/dozen→"dozen", হালি→"hali", বস্তা/ব্যাগ/sack→"sack", else "piece"
+Unit mapping rules:
+- কেজি/কেজির/kg/kilo -> "kg"
+- গ্রাম/gram/gm -> "gram"
+- লিটার/litre/liter/বোতল -> "litre"
+- প্যাকেট/প্যাক/packet/pack -> "packet"
+- ডজন/dozen -> "dozen"
+- হালি/হালির -> "hali"
+- বস্তা/ব্যাগ/sack/bag -> "sack"
+- পিস/টা/টি/piece/pc -> "piece"
+
+Fraction numbers:
+- আধা / half -> 0.5
+- দেড় / দেড় / one and half -> 1.5
+- আড়াই / আড়াই -> 2.5
+- পৌনে -> 0.75
+- সোয়া / সোয়া -> 1.25
 
 Examples:
-Input: "চিনি কেন 120 বেঁচে 130 স্টক 50 কেজি"
-Output: {"name":"চিনি","name_bn":"চিনি","buyPrice":120,"sellPrice":130,"stock":50,"unit":"kg"}
+Input: "২ কেজি চিনি, ১ লিটার রূপচাঁদা সয়াবিন তেল এবং ৩ প্যাকেট ম্যাগি নুডলস"
+Output: {"items":[{"name":"Sugar","name_bn":"চিনি","quantity":2,"unit":"kg"},{"name":"Rupchanda Soybean Oil","name_bn":"রূপচাঁদা সয়াবিন তেল","quantity":1,"unit":"litre"},{"name":"Maggi Noodles","name_bn":"ম্যাগি নুডলস","quantity":3,"unit":"packet"}]}
+
+Input: "give me half kg dal, 1 dozen eggs and 2 packets salt"
+Output: {"items":[{"name":"Dal","name_bn":"ডাল","quantity":0.5,"unit":"kg"},{"name":"Egg","name_bn":"ডিম","quantity":1,"unit":"dozen"},{"name":"Salt","name_bn":"লবণ","quantity":2,"unit":"packet"}]}`
+
+const PRODUCT_LIST_SYSTEM_PROMPT = `You are an AI assistant for a Bangladeshi grocery shop (মুদি দোকান).
+The shopkeeper will speak one or multiple product definitions to create in the inventory.
+Extract structured product entries into a JSON list.
+
+Output ONLY valid JSON in this exact structure:
+{
+  "products": [
+    {
+      "name": "spoken or English product name",
+      "name_bn": "Bengali product name",
+      "buyPrice": number or null,
+      "sellPrice": number or null,
+      "stock": number or null,
+      "unit": "piece" | "kg" | "gram" | "litre" | "packet" | "dozen" | "hali" | "sack"
+    }
+  ]
+}
+
+Examples:
+Input: "চিনি কেনা ১২০ বেচা ১৩০ স্টক ৫০ কেজি, লবণ কেনা ৩৫ বেচা ৪০ স্টক ৩০ প্যাকেট"
+Output: {"products":[{"name":"চিনি","name_bn":"চিনি","buyPrice":120,"sellPrice":130,"stock":50,"unit":"kg"},{"name":"লবণ","name_bn":"লবণ","buyPrice":35,"sellPrice":40,"stock":30,"unit":"packet"}]}
 
 Input: "egg dozen buy 36 sell 42 stock 100"
-Output: {"name":"Egg","name_bn":"ডিম","buyPrice":36,"sellPrice":42,"stock":100,"unit":"dozen"}
+Output: {"products":[{"name":"Egg","name_bn":"ডিম","buyPrice":36,"sellPrice":42,"stock":100,"unit":"dozen"}]}`
 
-Input: "সয়াবিন তেল ১ লিটার কেনা ১৮০ বেচা ১৯৫ স্টক ২০"
-Output: {"name":"সয়াবিন তেল","name_bn":"সয়াবিন তেল","buyPrice":180,"sellPrice":195,"stock":20,"unit":"litre"}`
+const EXPENSE_SYSTEM_PROMPT = `You are an AI assistant for a Bangladeshi grocery shop (মুদি দোকান).
+The shopkeeper will speak an expense they made today.
+Extract the expense category, amount, and note in JSON.
 
-const SEARCH_SYSTEM_PROMPT = `You are an assistant for a Bangladeshi grocery shop (মুদি দোকান).
+Categories must be one of:
+- "rent" (দোকান ভাড়া / ঘর ভাড়া)
+- "utility" (বিদ্যুৎ বিল / কারেন্ট বিল / পানি বিল / গ্যাস বিল / ওয়াইফাই)
+- "salary" (কর্মচারীর বেতন / বেতন / মজুরি / খালাসি)
+- "transport" (ভাড়া / রিকশা ভাড়া / ভ্যান ভাড়া / পরিবহন / গাড়ি ভাড়া)
+- "refreshment" (নাস্তা / চা / বিস্কুট / সিগারেট / পান / খাওয়া)
+- "repair" (মেরামত / কার্পেন্টার / লাইট ঠিক করা / প্লাগ)
+- "license" (ট্রেড লাইসেন্স / ট্যাক্স / নবায়ন)
+- "other" (অন্যান্য / বিবিধ)
 
-The shopkeeper will speak a product request while making a sale. Extract what they want to sell.
-Return ONLY valid JSON — no explanation.
-
-Fields:
-- "productName": the product name to search for (clean, no filler words)
-- "productName_bn": Bengali version of the product name
-- "quantity": how many/much they want (number, default 1)
-- "unit": one of "piece","kg","gram","litre","packet","dozen","hali","sack" (default "piece")
+Output ONLY valid JSON:
+{
+  "category": "rent" | "utility" | "salary" | "transport" | "refreshment" | "repair" | "license" | "other",
+  "amount": number,
+  "note": "short description"
+}
 
 Examples:
-Input: "দুই কেজি চিনি দাও"
-Output: {"productName":"চিনি","productName_bn":"চিনি","quantity":2,"unit":"kg"}
+Input: "দোকানের বিদ্যুৎ বিল ১৫০০ টাকা দিয়েছি"
+Output: {"category":"utility","amount":1500,"note":"বিদ্যুৎ বিল"}
 
-Input: "১ লিটার সয়াবিন তেল"
-Output: {"productName":"সয়াবিন তেল","productName_bn":"সয়াবিন তেল","quantity":1,"unit":"litre"}
+Input: "চা নাস্তা খরচ ৬০ টাকা"
+Output: {"category":"refreshment","amount":60,"note":"চা নাস্তা"}`
 
-Input: "give me 3 packets maggi noodles"
-Output: {"productName":"Maggi Noodles","productName_bn":"ম্যাগি নুডলস","quantity":3,"unit":"packet"}
+const PURCHASE_SYSTEM_PROMPT = `You are an AI assistant for a Bangladeshi grocery shop.
+The shopkeeper will speak incoming stock / restock invoice items.
+Extract the items list into JSON.
 
-Input: "আধা কেজি ডাল"
-Output: {"productName":"ডাল","productName_bn":"ডাল","quantity":0.5,"unit":"kg"}
+Output ONLY valid JSON:
+{
+  "items": [
+    {
+      "product_name": "product name in Bengali or English",
+      "qty": number,
+      "unit": "piece" | "kg" | "gram" | "litre" | "packet" | "dozen" | "hali" | "sack",
+      "unit_cost": number
+    }
+  ]
+}
 
-Input: "এক ডজন ডিম নেব"
-Output: {"productName":"ডিম","productName_bn":"ডিম","quantity":1,"unit":"dozen"}`
+Examples:
+Input: "চিনি ৫০ কেজি কেনা ১০০ টাকা, ডাল ২০ কেজি কেনা ৯০ টাকা"
+Output: {"items":[{"product_name":"চিনি","qty":50,"unit":"kg","unit_cost":100},{"product_name":"ডাল","qty":20,"unit":"kg","unit_cost":90}]}`
+
+const KHATA_SYSTEM_PROMPT = `You are an AI assistant for a Bangladeshi grocery shop.
+The shopkeeper will speak about a customer due payment or credit given.
+Extract the party and amount into JSON.
+
+Output ONLY valid JSON:
+{
+  "party_type": "customer" | "supplier",
+  "party_name": "name of person",
+  "amount": number,
+  "type": "payment_received" | "credit_sale" | "payment_made" | "credit_purchase"
+}
+
+Examples:
+Input: "রহিম ভাই ৫০০ টাকা জমা দিল"
+Output: {"party_type":"customer","party_name":"রহিম","amount":500,"type":"payment_received"}
+
+Input: "করিম বাকি নিল ২০০ টাকা"
+Output: {"party_type":"customer","party_name":"করিম","amount":200,"type":"credit_sale"}`
+
+/* ── JSON Parser Helper ─────────────────────────────────────────────────── */
 
 function extractAndParseJSON(raw: string): Record<string, unknown> | null {
   try {
     return JSON.parse(raw)
   } catch {
-    // Strip markdown code blocks if wrapped by model
     const codeBlock = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
     if (codeBlock && codeBlock[1]) {
       try {
@@ -78,7 +189,6 @@ function extractAndParseJSON(raw: string): Record<string, unknown> | null {
       }
     }
 
-    // Extract between outermost { and }
     const firstBrace = raw.indexOf('{')
     const lastBrace = raw.lastIndexOf('}')
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
@@ -96,76 +206,138 @@ async function callGroqDirect(systemPrompt: string, userText: string): Promise<R
   const groqKey = typeof import.meta !== 'undefined' && import.meta.env?.VITE_GROQ_API_KEY
   if (!groqKey) return null
 
-  try {
-    const res = await fetch(GROQ_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${groqKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userText.trim() },
-        ],
-        temperature: 0.1,
-        max_tokens: 250,
-        response_format: { type: 'json_object' },
-      }),
-    })
+  const models = [GROQ_MODEL, GROQ_FALLBACK_MODEL]
 
-    if (!res.ok) {
-      console.warn('[voice] Groq API returned status:', res.status)
-      return null
+  for (const model of models) {
+    try {
+      const res = await fetch(GROQ_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userText.trim() },
+          ],
+          temperature: 0.1,
+          max_tokens: 600,
+          response_format: { type: 'json_object' },
+        }),
+      })
+
+      if (!res.ok) {
+        console.warn(`[voice] Groq API (${model}) returned status:`, res.status)
+        continue
+      }
+
+      const data = await res.json()
+      const content = data?.choices?.[0]?.message?.content
+      if (!content) continue
+      const parsed = extractAndParseJSON(content)
+      if (parsed) return parsed
+    } catch (err) {
+      console.warn(`[voice] Groq (${model}) call failed:`, err)
+    }
+  }
+
+  return null
+}
+
+/* ── Exported LLM Calling Functions ───────────────────────────────────────── */
+
+/**
+ * Parses spoken text for Sell screen into a list of items to add to cart.
+ */
+export async function llmParseSellItems(transcript: string): Promise<ParsedSellItem[] | null> {
+  try {
+    let r = await callGroqDirect(SELL_CART_SYSTEM_PROMPT, transcript)
+
+    if (!r) {
+      const { supabase } = await import('@/lib/supabase')
+      const { data, error } = await supabase.functions.invoke('voice-parse', {
+        body: { transcript, mode: 'sell_cart' },
+      })
+      if (!error && data?.result) r = data.result
     }
 
-    const data = await res.json()
-    const content = data?.choices?.[0]?.message?.content
-    if (!content) return null
-    return extractAndParseJSON(content)
+    if (!r) return null
+
+    const rawList = Array.isArray(r.items) ? r.items : Array.isArray(r) ? r : null
+    if (!rawList) return null
+
+    const validUnits = ['piece', 'kg', 'gram', 'litre', 'packet', 'dozen', 'hali', 'sack']
+    const out: ParsedSellItem[] = []
+
+    for (const item of rawList) {
+      if (typeof item !== 'object' || !item) continue
+      const name = String(item.name || item.name_bn || item.productName || '').trim()
+      const name_bn = String(item.name_bn || item.name || item.productName_bn || name).trim()
+      const quantity = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1
+      const unit = typeof item.unit === 'string' && validUnits.includes(item.unit) ? item.unit : 'piece'
+
+      if (name || name_bn) {
+        out.push({ name, name_bn, quantity, unit })
+      }
+    }
+
+    return out.length > 0 ? out : null
   } catch (err) {
-    console.warn('[voice] Direct Groq call failed:', err)
+    console.warn('[voice] llmParseSellItems threw:', err)
     return null
   }
 }
 
 /**
- * Calls Groq LLM (via direct VITE_GROQ_API_KEY or Supabase Edge Function)
- * to extract structured product data from speech.
+ * Parses spoken text into a list of product definitions to create in inventory.
  */
-export async function llmParseProduct(transcript: string): Promise<ParsedProduct | null> {
+export async function llmParseProductList(transcript: string): Promise<ParsedProduct[] | null> {
   try {
-    // 1. Try direct Groq call using VITE_GROQ_API_KEY if configured
-    let r = await callGroqDirect(PRODUCT_SYSTEM_PROMPT, transcript)
+    let r = await callGroqDirect(PRODUCT_LIST_SYSTEM_PROMPT, transcript)
 
-    // 2. Fall back to Supabase Edge Function if no client key
     if (!r) {
       const { supabase } = await import('@/lib/supabase')
       const { data, error } = await supabase.functions.invoke('voice-parse', {
-        body: { transcript, mode: 'product' },
+        body: { transcript, mode: 'product_list' },
       })
-      if (!error && data?.result) {
-        r = data.result
-      }
+      if (!error && data?.result) r = data.result
     }
 
     if (!r) return null
 
+    const rawList = Array.isArray(r.products) ? r.products : Array.isArray(r) ? r : [r]
     const validUnits: UnitType[] = ['piece', 'kg', 'gram', 'litre', 'packet', 'dozen', 'hali', 'sack']
+    const out: ParsedProduct[] = []
 
-    return {
-      name:       typeof r.name === 'string'      ? (r.name as string).trim()      : '',
-      name_bn:    typeof r.name_bn === 'string'   ? (r.name_bn as string).trim()   : '',
-      buyPrice:   typeof r.buyPrice === 'number'  ? r.buyPrice                     : null,
-      sellPrice:  typeof r.sellPrice === 'number' ? r.sellPrice                    : null,
-      stock:      typeof r.stock === 'number'     ? r.stock                        : null,
-      unit:       validUnits.includes(r.unit as UnitType) ? r.unit as UnitType     : 'piece',
+    for (const item of rawList) {
+      if (typeof item !== 'object' || !item) continue
+      const name = String(item.name || item.name_bn || '').trim()
+      const name_bn = String(item.name_bn || name).trim()
+      if (!name && !name_bn) continue
+
+      out.push({
+        name,
+        name_bn,
+        buyPrice: typeof item.buyPrice === 'number' ? item.buyPrice : null,
+        sellPrice: typeof item.sellPrice === 'number' ? item.sellPrice : null,
+        stock: typeof item.stock === 'number' ? item.stock : null,
+        unit: validUnits.includes(item.unit as UnitType) ? (item.unit as UnitType) : 'piece',
+      })
     }
+
+    return out.length > 0 ? out : null
   } catch (err) {
-    console.warn('[voice] LLM parse threw, falling back to regex:', err)
+    console.warn('[voice] llmParseProductList threw:', err)
     return null
   }
+}
+
+/** Single product parse convenience (calls llmParseProductList) */
+export async function llmParseProduct(transcript: string): Promise<ParsedProduct | null> {
+  const list = await llmParseProductList(transcript)
+  return list && list.length > 0 ? list[0] : null
 }
 
 export interface ParsedSearch {
@@ -175,40 +347,116 @@ export interface ParsedSearch {
   unit: string
 }
 
-/**
- * Calls Groq LLM (via direct VITE_GROQ_API_KEY or Supabase Edge Function)
- * to extract product name and quantity from a spoken sales request.
- */
+/** Backward-compatible single item search */
 export async function llmSearchProduct(transcript: string): Promise<ParsedSearch | null> {
-  try {
-    // 1. Try direct Groq call using VITE_GROQ_API_KEY if configured
-    let r = await callGroqDirect(SEARCH_SYSTEM_PROMPT, transcript)
+  const items = await llmParseSellItems(transcript)
+  if (items && items.length > 0) {
+    return {
+      productName: items[0].name,
+      productName_bn: items[0].name_bn,
+      quantity: items[0].quantity,
+      unit: items[0].unit,
+    }
+  }
+  return null
+}
 
-    // 2. Fall back to Supabase Edge Function
+/**
+ * Parses spoken expense into category, amount, and note.
+ */
+export async function llmParseExpense(transcript: string): Promise<ParsedExpense | null> {
+  try {
+    let r = await callGroqDirect(EXPENSE_SYSTEM_PROMPT, transcript)
+
     if (!r) {
       const { supabase } = await import('@/lib/supabase')
       const { data, error } = await supabase.functions.invoke('voice-parse', {
-        body: { transcript, mode: 'search' },
+        body: { transcript, mode: 'expense' },
       })
-      if (!error && data?.result) {
-        r = data.result
-      }
+      if (!error && data?.result) r = data.result
     }
 
     if (!r) return null
 
-    return {
-      productName:    typeof r.productName === 'string'    ? (r.productName as string).trim()    : '',
-      productName_bn: typeof r.productName_bn === 'string' ? (r.productName_bn as string).trim() : '',
-      quantity:       typeof r.quantity === 'number'       ? r.quantity                          : 1,
-      unit:           typeof r.unit === 'string'           ? (r.unit as string)                  : 'piece',
+    const validCategories: ExpenseCategory[] = [
+      'rent', 'utility', 'salary', 'transport', 'refreshment', 'repair', 'license', 'other',
+    ]
+
+    const category = validCategories.includes(r.category as ExpenseCategory)
+      ? (r.category as ExpenseCategory)
+      : 'other'
+
+    const amount = typeof r.amount === 'number' && r.amount > 0 ? r.amount : 0
+    const note = typeof r.note === 'string' ? r.note.trim() : ''
+
+    if (amount > 0) {
+      return { category, amount, note }
     }
+    return null
   } catch (err) {
-    console.warn('[voice] LLM search threw, falling back to regex:', err)
+    console.warn('[voice] llmParseExpense threw:', err)
     return null
   }
 }
 
+/**
+ * Parses spoken purchase/restock invoice items.
+ */
+export async function llmParsePurchaseItems(transcript: string): Promise<ParsedPurchaseItem[] | null> {
+  try {
+    let r = await callGroqDirect(PURCHASE_SYSTEM_PROMPT, transcript)
+    if (!r) return null
+
+    const rawList = Array.isArray(r.items) ? r.items : Array.isArray(r) ? r : null
+    if (!rawList) return null
+
+    const validUnits: UnitType[] = ['piece', 'kg', 'gram', 'litre', 'packet', 'dozen', 'hali', 'sack']
+    const out: ParsedPurchaseItem[] = []
+
+    for (const item of rawList) {
+      if (typeof item !== 'object' || !item) continue
+      const product_name = String(item.product_name || item.name || '').trim()
+      const qty = typeof item.qty === 'number' && item.qty > 0 ? item.qty : 1
+      const unit = validUnits.includes(item.unit as UnitType) ? (item.unit as UnitType) : 'piece'
+      const unit_cost = typeof item.unit_cost === 'number' ? item.unit_cost : 0
+
+      if (product_name) {
+        out.push({ product_name, qty, unit, unit_cost })
+      }
+    }
+
+    return out.length > 0 ? out : null
+  } catch (err) {
+    console.warn('[voice] llmParsePurchaseItems threw:', err)
+    return null
+  }
+}
+
+/**
+ * Parses spoken Khata customer/supplier payment or credit entry.
+ */
+export async function llmParseKhataEntry(transcript: string): Promise<ParsedKhataEntry | null> {
+  try {
+    let r = await callGroqDirect(KHATA_SYSTEM_PROMPT, transcript)
+    if (!r) return null
+
+    const party_type = r.party_type === 'supplier' ? 'supplier' : 'customer'
+    const party_name = typeof r.party_name === 'string' ? r.party_name.trim() : ''
+    const amount = typeof r.amount === 'number' && r.amount > 0 ? r.amount : 0
+    const validTypes = ['payment_received', 'credit_sale', 'payment_made', 'credit_purchase']
+    const type = validTypes.includes(r.type as string) ? (r.type as ParsedKhataEntry['type']) : 'payment_received'
+
+    if (party_name && amount > 0) {
+      return { party_type, party_name, amount, type }
+    }
+    return null
+  } catch (err) {
+    console.warn('[voice] llmParseKhataEntry threw:', err)
+    return null
+  }
+}
+
+/* ── Fallback Local Regex Parsers ─────────────────────────────────────────── */
 
 const BN_TO_EN: Record<string, string> = {
   '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
@@ -219,7 +467,7 @@ export function normalizeBnDigits(str: string): string {
   return str.replace(/[০-৯]/g, (d) => BN_TO_EN[d] || d)
 }
 
-function detectUnit(str: string): UnitType | null {
+export function detectUnit(str: string): UnitType | null {
   if (/(?:কেজি|কেজির|গ্রাম|কেজির\s*বস্তা|kg|kilo|gram|gm)\b|কেজি|kg/i.test(str)) return 'kg'
   if (/(?:লিটার|লিটারের|লি|মিলি|litre|liter|ml|l)\b|লিটার|litre/i.test(str)) return 'litre'
   if (/(?:প্যাকেট|প্যাক|packet|pack|pkt)\b|প্যাকেট|packet/i.test(str)) return 'packet'
@@ -231,27 +479,42 @@ function detectUnit(str: string): UnitType | null {
 }
 
 /**
- * Intelligent parser for spoken Bengali product definitions:
- * e.g. "চিনি কেন 120 বেঁচে 130 স্টক 50 কেজি"
- * e.g. "সয়াবিন তেল ১ লিটার কেনা ১৮০ বেচা ১৯৫ স্টক ২০ বোতল"
- * e.g. "ডিম হালি কেনা ৩৬ টাকা বিক্রি ৪২ টাকা স্টক ১০০ হালি"
+ * Splits multi-item spoken sales phrases (separated by commas, 'এবং', 'আর', 'ও', 'plus', 'and')
  */
-export function parseSpokenProduct(phrase: string): {
-  name: string
-  buyPrice: number | null
-  sellPrice: number | null
-  stock: number | null
-  unit: UnitType
-} {
+export function parseMultiSellItems(phrase: string): ParsedSellItem[] {
+  const parts = phrase
+    .split(/[,;\n]|(?:\s+(?:এবং|আর|ও|and|plus|\+)\s+)/i)
+    .map((p) => p.trim())
+    .filter(Boolean)
+
+  const items: ParsedSellItem[] = []
+  for (const part of parts) {
+    const { qty, cleanName } = parseVoiceQty(part)
+    const unit = detectUnit(part) || 'piece'
+    if (cleanName) {
+      items.push({
+        name: cleanName,
+        name_bn: cleanName,
+        quantity: qty,
+        unit,
+      })
+    }
+  }
+
+  return items
+}
+
+/**
+ * Intelligent regex parser for spoken Bengali product definitions
+ */
+export function parseSpokenProduct(phrase: string): ParsedProduct {
   const original = phrase.trim()
   const normalized = normalizeBnDigits(original)
 
-  // Keyword patterns
   const buyKeywordRegex = /(?:^|\s)(?:কেনার\s*দাম|কেনা\s*দাম|কেনার|কেনা|কেন|কিনেছি|কিনে|কেনে|ক্রয়মূল্য|ক্রয়|ক্রয়মূল্য|ক্রয়|buy|cost)(?:\s|$|[:=\-])/i
   const sellKeywordRegex = /(?:^|\s)(?:বিক্রির\s*দাম|বিক্রি\s*দাম|বিক্রয়মূল্য|বিক্রয়মূল্য|বিক্রির|বিক্রয়|বিক্রয়|বিক্রি|বেচার\s*দাম|বেচা\s*দাম|বেচার|বেচা|বেচে|বেঁচে|বেচবো|বেচব|বেচ|সেল|sell)(?:\s|$|[:=\-])/i
   const stockKeywordRegex = /(?:^|\s)(?:স্টক|স্টকে|পরিমাণ|পরিমান|সংখ্যা|stock|qty)(?:\s|$|[:=\-])/i
 
-  // Find the earliest keyword boundary
   const matches = [
     normalized.search(buyKeywordRegex),
     normalized.search(sellKeywordRegex),
@@ -274,7 +537,6 @@ export function parseSpokenProduct(phrase: string): {
   let stock: number | null = null
   let unit: UnitType = 'piece'
 
-  // Extract Buy Price
   const buyMatch = paramPart.match(
     /(?:কেনার\s*দাম|কেনা\s*দাম|কেনার|কেনা|কেন|কিনেছি|কিনে|কেনে|ক্রয়মূল্য|ক্রয়|ক্রয়মূল্য|ক্রয়|buy|cost)\s*(?:হলো|হল|ছিল|দাম|রেট|rate)?\s*[:=\-]?\s*(\d+(?:\.\d+)?)\s*(?:টাকা|টাকার|tk|taka)?/i,
   )
@@ -282,7 +544,6 @@ export function parseSpokenProduct(phrase: string): {
     buyPrice = parseFloat(buyMatch[1])
   }
 
-  // Extract Sell Price
   const sellMatch = paramPart.match(
     /(?:বিক্রির\s*দাম|বিক্রি\s*দাম|বিক্রয়মূল্য|বিক্রয়মূল্য|বিক্রির|বিক্রয়|বিক্রয়|বিক্রি|বেচার\s*দাম|বেচা\s*দাম|বেচার|বেচা|বেচে|বেঁচে|বেচবো|বেচব|বেচ|সেল|sell)\s*(?:হলো|হল|ছিল|দাম|রেট|rate)?\s*[:=\-]?\s*(\d+(?:\.\d+)?)\s*(?:টাকা|টাকার|tk|taka)?/i,
   )
@@ -290,7 +551,6 @@ export function parseSpokenProduct(phrase: string): {
     sellPrice = parseFloat(sellMatch[1])
   }
 
-  // Extract Stock and specific stock unit
   const stockMatch = paramPart.match(
     /(?:স্টক|স্টকে|পরিমাণ|পরিমান|মোট|সংখ্যা|stock|qty)\s*(?:হলো|হল|ছিল|হবে|আছে)?\s*[:=\-]?\s*(\d+(?:\.\d+)?)\s*(কেজি|গ্রাম|লিটার|লি|প্যাকেট|প্যাক|ডজন|হালি|বোতল|বস্তা|ব্যাগ|পিস|টি|টা|piece|pc|pcs|kg|litre|packet|dozen|hali|sack|bag)?/i,
   ) || paramPart.match(
@@ -305,7 +565,6 @@ export function parseSpokenProduct(phrase: string): {
     }
   }
 
-  // If unit not detected from stock phrase, try the parameter section, then name section
   if (unit === 'piece') {
     const paramUnit = detectUnit(paramPart)
     if (paramUnit) {
@@ -316,19 +575,18 @@ export function parseSpokenProduct(phrase: string): {
     }
   }
 
-  // Clean name
   let cleanName = namePart
     .replace(/^[,;:\-_/\s]+|[,;:\-_/\s]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim()
 
-  // Fallback if no keyword was found and everything was in namePart
   if (!cleanName && original) {
     cleanName = original
   }
 
   return {
     name: cleanName,
+    name_bn: cleanName,
     buyPrice,
     sellPrice,
     stock,
@@ -369,3 +627,29 @@ export function parseVoiceQty(phrase: string): { qty: number; cleanName: string 
 
   return { qty, cleanName: text }
 }
+
+/**
+ * Intelligent regex parser for spoken expenses (fallback when offline)
+ */
+export function parseSpokenExpense(phrase: string): ParsedExpense {
+  const normalized = normalizeBnDigits(phrase.trim())
+  let category: ExpenseCategory = 'other'
+
+  if (/ভাড়া|ভাড়া|ঘর|দোকান|rent/i.test(normalized)) category = 'rent'
+  else if (/বিদ্যুৎ|কারেন্ট|বিল|পানি|গ্যাস|ওয়াইফাই|utility|electricity/i.test(normalized)) category = 'utility'
+  else if (/বেতন|মজুরি|কর্মচারী|salary|wage/i.test(normalized)) category = 'salary'
+  else if (/গাড়ি|রিকশা|ভ্যান|পরিবহন|transport/i.test(normalized)) category = 'transport'
+  else if (/নাস্তা|চা|বিস্কুট|সিগারেট|পান|খাওয়া|refreshment|tea/i.test(normalized)) category = 'refreshment'
+  else if (/মেরামত|লাইট|repair/i.test(normalized)) category = 'repair'
+  else if (/লাইসেন্স|ট্যাক্স|license|tax/i.test(normalized)) category = 'license'
+
+  const amountMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:টাকা|টাকার|tk|taka)?/i)
+  const amount = amountMatch && amountMatch[1] ? parseFloat(amountMatch[1]) : 0
+
+  return {
+    category,
+    amount,
+    note: phrase.trim(),
+  }
+}
+

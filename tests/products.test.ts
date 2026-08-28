@@ -17,6 +17,7 @@ import {
   toProductDraft,
   validateDraft,
 } from '@/screens/products/draft'
+import { parseSpokenProduct } from '@/lib/voice'
 import type { ProductStatus } from '@/lib/database.types'
 import { deepEq, eq, notOk, ok, suite } from './_harness'
 
@@ -272,3 +273,35 @@ suite('toAdjustPayload')
   eq(loss.reason, 'theft', 'with the reason the shopkeeper chose')
   eq(loss.note, null, 'and an empty note is absent rather than ""')
 }
+
+suite('parseSpokenProduct')
+{
+  // User's exact reported phrase:
+  const p1 = parseSpokenProduct('চিনি কেন 120 বেঁচে 130 স্টক 50 কেজি')
+  eq(p1.name, 'চিনি', 'extracts product name চিনি')
+  eq(p1.buyPrice, 120, 'extracts buy price from কেন 120')
+  eq(p1.sellPrice, 130, 'extracts sell price from বেঁচে 130')
+  eq(p1.stock, 50, 'extracts stock 50')
+  eq(p1.unit, 'kg', 'extracts unit kg')
+
+  const p2 = parseSpokenProduct('সয়াবিন তেল ১ লিটার কেনা ১৮০ বেচা ১৯৫ স্টক ২০ বোতল')
+  eq(p2.name, 'সয়াবিন তেল ১ লিটার', 'preserves description in name')
+  eq(p2.buyPrice, 180, 'extracts bengali digits buy price')
+  eq(p2.sellPrice, 195, 'extracts bengali digits sell price')
+  eq(p2.stock, 20, 'extracts bengali digits stock')
+  eq(p2.unit, 'litre', 'extracts litre')
+
+  const p3 = parseSpokenProduct('ডিম হালি কেনা ৩৬ টাকা বিক্রি ৪২ টাকা স্টক ১০০ হালি')
+  eq(p3.name, 'ডিম হালি', 'extracts egg name')
+  eq(p3.buyPrice, 36, 'extracts buy price')
+  eq(p3.sellPrice, 42, 'extracts sell price')
+  eq(p3.stock, 100, 'extracts stock')
+  eq(p3.unit, 'hali', 'extracts hali')
+
+  const p4 = parseSpokenProduct('মিনিকেট চাল ৫০ কেজি কেনা ৩০০০ বেচা ৩২০০ স্টক ১০ বস্তা')
+  eq(p4.buyPrice, 3000, 'extracts 3000 buy price')
+  eq(p4.sellPrice, 3200, 'extracts 3200 sell price')
+  eq(p4.stock, 10, 'extracts 10 stock')
+  eq(p4.unit, 'sack', 'extracts sack')
+}
+

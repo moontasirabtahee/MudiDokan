@@ -13,42 +13,7 @@ interface VoiceSearchModalProps {
   onSetSearch?: (query: string) => void
 }
 
-/**
- * Parses Bengali numbers and text quantities (যেমন: "২ কেজি", "১ লিটার", "আধা কেজি")
- */
-function parseVoiceQty(phrase: string): { qty: number; cleanName: string } {
-  let text = phrase.trim()
-  let qty = 1
-
-  // Replace Bengali digits with English digits
-  const bnToEn: Record<string, string> = {
-    '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
-    '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9',
-  }
-  const normalized = text.replace(/[০-৯]/g, (d) => bnToEn[d] || d)
-
-  // Check for half / আধা / পৌনে
-  if (normalized.includes('আধা') || normalized.includes('half')) {
-    qty = 0.5
-    text = text.replace(/আধা|half/gi, '').trim()
-  } else {
-    // Match leading or embedded number (e.g. "2 কেজি" or "5 পিস")
-    const match = normalized.match(/(\d+(\.\d+)?)\s*(কেজি|গ্রাম|লিটার|পিস|প্যাকেট|ডজন|হালি|বস্তা|ব্যাগ|kg|litre|packet|piece)?/i)
-    if (match && match[1]) {
-      const parsed = parseFloat(match[1])
-      if (!isNaN(parsed) && parsed > 0) {
-        qty = parsed
-        // Remove the parsed quantity and unit from the product name
-        text = text.replace(match[0], '').trim()
-      }
-    }
-  }
-
-  // Remove common filler words
-  text = text.replace(/(দিন|দাও|লাগবে|চাই|নেন|দেন|একটু)/g, '').trim()
-
-  return { qty, cleanName: text }
-}
+import { parseVoiceQty } from '@/lib/voice'
 
 export function VoiceSearchModal({
   open,

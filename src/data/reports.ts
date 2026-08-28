@@ -37,18 +37,98 @@ import { rpc, supabase, unwrap } from '@/lib/supabase'
  * a cashier sees an app with no profit in it rather than an app full of refusals.
  */
 
+import { listOutbox } from '@/offline/outbox'
+
 /* ── Dashboard ──────────────────────────────────────────────────────────── */
 
 /**
  * One row, everything the home screen needs.
  *
- * `maybeSingle` because a shop that has existed for four minutes and sold nothing
- * has no row in the underlying aggregate, and "no sales yet" is the correct answer
- * to that, not an error. The dashboard renders zeroes and a hint to make the first
- * sale.
+ * Guarantees a non-null, consistent object with live figures aggregated from
+ * Supabase `v_dashboard_today` and pending local outbox records (sales, expenses,
+ * payments).
  */
-export async function getDashboardToday(shopId: string): Promise<DashboardToday | null> {
-  return unwrap(supabase.from('v_dashboard_today').select('*').eq('shop_id', shopId).maybeSingle())
+export async function getDashboardToday(shopId: string): Promise<DashboardToday> {
+  const row = await unwrap(
+    supabase.from('v_dashboard_today').select('*').eq('shop_id', shopId).maybeSingle(),
+  ).catch(() => null)
+
+  const todayStr = new Date().toISOString().split('T')[0]
+
+  const base: DashboardToday = row
+    ? Object.assign({}, row) as DashboardToday
+    : {
+        shop_id: shopId,
+        today: todayStr,
+        sales_count: 0,
+        sales_total: 0,
+        collected_total: 0,
+        credit_given: 0,
+        cogs: 0,
+        gross_profit: 0,
+        expenses_total: 0,
+        net_profit: 0,
+        dues_collected_today: 0,
+        total_receivable: 0,
+        customers_with_dues: 0,
+        total_payable: 0,
+        low_stock_count: 0,
+        out_of_stock_count: 0,
+        expiring_soon_count: 0,
+        stock_value_at_cost: 0,
+      }
+
+  // Merge only truly-pending outbox records — those not yet acknowledged by the
+  // server. Records with status 'sent', 'done', or 'failed' must NOT be merged:
+  //   • 'done'/'sent' → the DB view already counted them; adding again double-counts.
+  //   • 'failed'      → they will not arrive; including them is a lie.
+  //
+  // gross_profit is intentionally NOT updated for pending sales: computing it
+  // correctly requires COGS (buy price × qty), which is not stored in the outbox
+  // payload. An approximation of gross_profit is worse than the DB value, so we
+  // leave it alone and accept that profit shows the last-synced figure.
+  //
+  // net_profit is therefore also left as-is from the DB row. We only subtract
+  // pending expense amounts so the net_profit degrades correctly when an expense
+  // is recorded offline before it syncs.
+  let pendingExpenses = 0
+  try {
+    const outboxRecords = await listOutbox({ shopId })
+    for (const r of outboxRecords) {
+      if (r.status !== 'pending') continue   // skip sent / done / failed
+      const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
+
+      if (r.op === 'create_sale') {
+        const total = Number(payload.total ?? r.amount ?? 0)
+        const paid  = Number(payload.paid  ?? total)
+        const due   = Math.max(0, total - paid)
+        base.sales_count  += 1
+        base.sales_total   = Math.round((base.sales_total  + total) * 100) / 100
+        base.collected_total = Math.round((base.collected_total + paid) * 100) / 100
+        base.credit_given  = Math.round((base.credit_given  + due)   * 100) / 100
+      } else if (r.op === 'create_expense') {
+        const amount = Number(payload.amount ?? r.amount ?? 0)
+        base.expenses_total = Math.round((base.expenses_total + amount) * 100) / 100
+        pendingExpenses      = Math.round((pendingExpenses    + amount) * 100) / 100
+      } else if (r.op === 'record_payment') {
+        const amount = Number(payload.amount ?? r.amount ?? 0)
+        if (payload.party === 'customer' && payload.direction === 'in') {
+          base.dues_collected_today = Math.round((base.dues_collected_today + amount) * 100) / 100
+          base.total_receivable     = Math.max(0, Math.round((base.total_receivable - amount) * 100) / 100)
+        }
+      }
+    }
+  } catch {
+    // Outbox unavailable (e.g. private-mode browser) — show DB-only figures.
+  }
+
+  // Adjust net_profit only by pending expenses. gross_profit stays as the DB
+  // computed it so profit numbers are never fabricated from incomplete COGS data.
+  if (pendingExpenses > 0) {
+    base.net_profit = Math.round((base.net_profit - pendingExpenses) * 100) / 100
+  }
+
+  return base
 }
 
 /* ── Trends ─────────────────────────────────────────────────────────────── */

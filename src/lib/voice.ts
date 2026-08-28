@@ -1,5 +1,91 @@
 import type { UnitType } from '@/lib/database.types'
 
+export interface ParsedProduct {
+  name: string
+  name_bn: string
+  buyPrice: number | null
+  sellPrice: number | null
+  stock: number | null
+  unit: UnitType
+}
+
+/**
+ * Calls the Supabase `voice-parse` Edge Function which proxies the transcript
+ * to Groq LLM (llama-3.1-8b-instant) and extracts structured product data.
+ *
+ * Returns null if the function is unavailable or the API key is not set,
+ * so callers can gracefully fall back to the regex parser.
+ */
+export async function llmParseProduct(transcript: string): Promise<ParsedProduct | null> {
+  try {
+    // Dynamic import so this module loads cleanly in test environments
+    // where VITE_SUPABASE_URL/ANON_KEY are not injected.
+    const { supabase } = await import('@/lib/supabase')
+
+    const { data, error } = await supabase.functions.invoke('voice-parse', {
+      body: { transcript },
+    })
+
+    if (error || !data?.result) {
+      console.warn('[voice] LLM parse failed, falling back to regex:', error)
+      return null
+    }
+
+    const r = data.result
+    const validUnits: UnitType[] = ['piece', 'kg', 'gram', 'litre', 'packet', 'dozen', 'hali', 'sack']
+
+    return {
+      name:       typeof r.name === 'string'      ? r.name.trim()      : '',
+      name_bn:    typeof r.name_bn === 'string'   ? r.name_bn.trim()   : '',
+      buyPrice:   typeof r.buyPrice === 'number'  ? r.buyPrice         : null,
+      sellPrice:  typeof r.sellPrice === 'number' ? r.sellPrice        : null,
+      stock:      typeof r.stock === 'number'     ? r.stock            : null,
+      unit:       validUnits.includes(r.unit)     ? r.unit as UnitType : 'piece',
+    }
+  } catch (err) {
+    console.warn('[voice] LLM parse threw, falling back to regex:', err)
+    return null
+  }
+}
+
+export interface ParsedSearch {
+  productName: string
+  productName_bn: string
+  quantity: number
+  unit: string
+}
+
+/**
+ * Calls the Supabase `voice-parse` Edge Function in 'search' mode.
+ * Extracts product name and quantity from a spoken sales request.
+ * Returns null on failure so the caller falls back to the basic qty parser.
+ */
+export async function llmSearchProduct(transcript: string): Promise<ParsedSearch | null> {
+  try {
+    const { supabase } = await import('@/lib/supabase')
+
+    const { data, error } = await supabase.functions.invoke('voice-parse', {
+      body: { transcript, mode: 'search' },
+    })
+
+    if (error || !data?.result) {
+      console.warn('[voice] LLM search failed, falling back to regex:', error)
+      return null
+    }
+
+    const r = data.result
+    return {
+      productName:    typeof r.productName === 'string'    ? r.productName.trim()    : '',
+      productName_bn: typeof r.productName_bn === 'string' ? r.productName_bn.trim() : '',
+      quantity:       typeof r.quantity === 'number'       ? r.quantity              : 1,
+      unit:           typeof r.unit === 'string'           ? r.unit                  : 'piece',
+    }
+  } catch (err) {
+    console.warn('[voice] LLM search threw, falling back to regex:', err)
+    return null
+  }
+}
+
 const BN_TO_EN: Record<string, string> = {
   '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
   '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9',

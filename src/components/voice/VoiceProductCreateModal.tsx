@@ -12,14 +12,13 @@ import { newId } from '@/lib/utils'
 import { useShop } from '@/providers/ShopProvider'
 import { useToast } from '@/providers/ToastProvider'
 import { BarcodeScannerModal } from '@/components/scanner/BarcodeScannerModal'
+import { llmParseProduct, parseSpokenProduct } from '@/lib/voice'
 
 interface VoiceProductCreateModalProps {
   open: boolean
   onClose: () => void
   onCreated?: () => void
 }
-
-import { parseSpokenProduct } from '@/lib/voice'
 
 export function VoiceProductCreateModal({
   open,
@@ -37,11 +36,13 @@ export function VoiceProductCreateModal({
   const [barcode, setBarcode] = useState('')
   const [saving, setSaving] = useState(false)
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [aiProcessing, setAiProcessing] = useState(false)
+  const [aiSource, setAiSource] = useState<'llm' | 'regex' | null>(null)
 
   const voice = useVoiceRecognition({
     lang: 'bn-BD',
     onResult: (spokenText) => {
-      handleSpoken(spokenText)
+      void handleSpoken(spokenText)
     },
   })
 
@@ -61,16 +62,37 @@ export function VoiceProductCreateModal({
     setStock(null)
     setUnit('piece')
     setBarcode('')
+    setAiSource(null)
   }
 
-  function handleSpoken(spoken: string) {
+  async function handleSpoken(spoken: string) {
     if (!spoken.trim()) return
-    const parsed = parseSpokenProduct(spoken)
-    if (parsed.name) setName(parsed.name)
-    if (parsed.buyPrice !== null) setBuyPrice(parsed.buyPrice)
-    if (parsed.sellPrice !== null) setSellPrice(parsed.sellPrice)
-    if (parsed.stock !== null) setStock(parsed.stock)
-    if (parsed.unit) setUnit(parsed.unit)
+
+    setAiProcessing(true)
+    setAiSource(null)
+
+    // 1. Try LLM first (Groq via Supabase Edge Function)
+    const llmResult = await llmParseProduct(spoken)
+
+    if (llmResult) {
+      if (llmResult.name) setName(llmResult.name)
+      if (llmResult.buyPrice !== null) setBuyPrice(llmResult.buyPrice)
+      if (llmResult.sellPrice !== null) setSellPrice(llmResult.sellPrice)
+      if (llmResult.stock !== null) setStock(llmResult.stock)
+      if (llmResult.unit) setUnit(llmResult.unit)
+      setAiSource('llm')
+    } else {
+      // 2. Fallback: fast local regex parser
+      const parsed = parseSpokenProduct(spoken)
+      if (parsed.name) setName(parsed.name)
+      if (parsed.buyPrice !== null) setBuyPrice(parsed.buyPrice)
+      if (parsed.sellPrice !== null) setSellPrice(parsed.sellPrice)
+      if (parsed.stock !== null) setStock(parsed.stock)
+      if (parsed.unit) setUnit(parsed.unit)
+      setAiSource('regex')
+    }
+
+    setAiProcessing(false)
   }
 
   async function handleSave(keepOpen = false) {
@@ -175,12 +197,40 @@ export function VoiceProductCreateModal({
           )}
         </p>
 
-        {voice.transcript ? (
-          <div className="p-2.5 rounded-lg bg-canvas border border-rule text-center">
-            <p className="text-xs text-ink-faint">আপনি বলেছেন:</p>
-            <p className="text-sm font-semibold text-ink mt-0.5">"{voice.transcript}"</p>
+        {voice.transcript || aiProcessing ? (
+          <div className="p-2.5 rounded-lg bg-canvas border border-rule text-center space-y-1.5">
+            {voice.transcript && (
+              <>
+                <p className="text-xs text-ink-faint">আপনি বলেছেন:</p>
+                <p className="text-sm font-semibold text-ink">"{voice.transcript}"</p>
+              </>
+            )}
+
+            {/* AI Processing indicator */}
+            {aiProcessing && (
+              <div className="flex items-center justify-center gap-1.5 text-xs text-brand font-semibold animate-pulse mt-1">
+                <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                AI বিশ্লেষণ করছে...
+              </div>
+            )}
+
+            {/* Source badge */}
+            {!aiProcessing && aiSource === 'llm' && (
+              <div className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-ok-soft text-ok font-semibold">
+                ✨ AI দ্বারা পূরণ হয়েছে
+              </div>
+            )}
+            {!aiProcessing && aiSource === 'regex' && (
+              <div className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-canvas border border-rule text-ink-faint">
+                স্বয়ংক্রিয় পূরণ
+              </div>
+            )}
           </div>
         ) : null}
+
 
         {/* Parsed Fields Preview & Edit */}
         <div className="space-y-3 pt-1">

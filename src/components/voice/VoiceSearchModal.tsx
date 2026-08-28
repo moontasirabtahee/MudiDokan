@@ -4,6 +4,7 @@ import { Icon } from '@/components/ui/Icon'
 import { useVoiceRecognition } from '@/hooks/useVoiceRecognition'
 import type { ProductStatus } from '@/lib/database.types'
 import { matchesSearch } from '@/lib/utils'
+import { llmSearchProduct, parseVoiceQty } from '@/lib/voice'
 
 interface VoiceSearchModalProps {
   open: boolean
@@ -12,8 +13,6 @@ interface VoiceSearchModalProps {
   onSelectProduct?: (product: ProductStatus, quantity: number) => void
   onSetSearch?: (query: string) => void
 }
-
-import { parseVoiceQty } from '@/lib/voice'
 
 export function VoiceSearchModal({
   open,
@@ -24,31 +23,51 @@ export function VoiceSearchModal({
 }: VoiceSearchModalProps) {
   const [matchedProduct, setMatchedProduct] = useState<ProductStatus | null>(null)
   const [matchedQty, setMatchedQty] = useState<number>(1)
+  const [aiProcessing, setAiProcessing] = useState(false)
 
   const voice = useVoiceRecognition({
     lang: 'bn-BD',
     onResult: (spokenText) => {
-      handleSpoken(spokenText)
+      void handleSpoken(spokenText)
     },
   })
 
   useEffect(() => {
     if (open) {
       setMatchedProduct(null)
+      setAiProcessing(false)
       voice.start()
     } else {
       voice.stop()
     }
   }, [open])
 
-  function handleSpoken(spoken: string) {
+  async function handleSpoken(spoken: string) {
     if (!spoken.trim()) return
 
-    const { qty, cleanName } = parseVoiceQty(spoken)
-    setMatchedQty(qty)
+    setAiProcessing(true)
 
-    // Search catalog for match
-    const target = cleanName.trim()
+    // 1. Try LLM first for intelligent extraction
+    const llmResult = await llmSearchProduct(spoken)
+
+    let searchName: string
+    let qty: number
+
+    if (llmResult && llmResult.productName) {
+      searchName = llmResult.productName_bn || llmResult.productName
+      qty = llmResult.quantity
+    } else {
+      // 2. Fallback to regex qty parser
+      const parsed = parseVoiceQty(spoken)
+      searchName = parsed.cleanName
+      qty = parsed.qty
+    }
+
+    setMatchedQty(qty)
+    setAiProcessing(false)
+
+    // Search catalog
+    const target = searchName.trim()
     if (target && products.length > 0) {
       const found = products.find((p) =>
         matchesSearch(target, p.name, p.name_bn, p.sku, p.barcode),
@@ -59,7 +78,7 @@ export function VoiceSearchModal({
       }
     }
 
-    // If no exact match found, pass search query to search input
+    // No exact match — pass as search query
     if (onSetSearch && target) {
       onSetSearch(target)
     }
@@ -114,19 +133,30 @@ export function VoiceSearchModal({
         </p>
 
         {/* Spoken text display */}
-        <div className="min-h-16 p-3 rounded-lg bg-canvas border border-rule flex flex-col items-center justify-center mb-4">
+        <div className="min-h-16 p-3 rounded-lg bg-canvas border border-rule flex flex-col items-center justify-center mb-4 gap-1.5">
           {voice.transcript ? (
             <p className="text-base font-semibold text-ink">"{voice.transcript}"</p>
           ) : (
             <p className="text-xs text-ink-faint italic">আপনার কথা শোনা হচ্ছে...</p>
           )}
 
-          {matchedProduct && (
-            <div className="mt-2 text-xs text-ok font-semibold bg-ok-soft px-2.5 py-1 rounded-full flex items-center gap-1">
-              <Icon name="check" size={14} />
-              <span>পণ্য পাওয়া গেছে: {matchedProduct.name_bn || matchedProduct.name} ({matchedQty} {matchedProduct.unit})</span>
+          {aiProcessing && (
+            <div className="flex items-center gap-1.5 text-xs text-brand font-semibold animate-pulse">
+              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+              AI খুঁজছে...
             </div>
           )}
+
+          {matchedProduct && !aiProcessing && (
+            <div className="mt-1 text-xs text-ok font-semibold bg-ok-soft px-2.5 py-1 rounded-full flex items-center gap-1">
+              <Icon name="check" size={14} />
+              <span>✨ পণ্য পাওয়া গেছে: {matchedProduct.name_bn || matchedProduct.name} ({matchedQty} {matchedProduct.unit})</span>
+            </div>
+          )}
+
         </div>
 
         <div className="flex gap-2">

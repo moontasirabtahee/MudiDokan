@@ -319,6 +319,18 @@ export async function dropShopCache(shopId: string): Promise<void> {
   await Promise.all(rows.map((row) => backend.del('cache', row.key)))
 }
 
+export async function invalidateCacheKey(shopId: string, name: string): Promise<void> {
+  const backend = await db()
+  await backend.del('cache', cacheKey(shopId, name))
+}
+
+export async function invalidateCachePrefix(shopId: string, prefix: string): Promise<void> {
+  const rows = await recordsByIndex<CacheRecord>('cache', 'by_shop', shopId)
+  const backend = await db()
+  const matching = rows.filter((row) => row.key.startsWith(`${shopId}:${prefix}`))
+  await Promise.all(matching.map((row) => backend.del('cache', row.key)))
+}
+
 /** Housekeeping on startup. Stale caches are worse than none — they mislead. */
 export async function pruneCache(maxAgeMs = SYNC.cacheTtlMs): Promise<number> {
   const rows = await allRecords<CacheRecord>('cache')

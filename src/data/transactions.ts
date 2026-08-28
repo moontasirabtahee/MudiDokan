@@ -159,7 +159,7 @@ export async function getSale(saleId: string): Promise<SaleWithItems> {
 }
 
 export async function listSalesForCustomer(customerId: string, limit = 20): Promise<Sale[]> {
-  return unwrap(
+  const rows = await unwrap(
     supabase
       .from('sales')
       .select('*')
@@ -167,6 +167,50 @@ export async function listSalesForCustomer(customerId: string, limit = 20): Prom
       .order('sold_at', { ascending: false })
       .limit(limit),
   ).catch(() => [] as Sale[])
+
+  let pendingSales: Sale[] = []
+  try {
+    const outboxRecords = await listOutbox()
+    pendingSales = outboxRecords
+      .filter((r) => r.op === 'create_sale' && r.status !== 'failed')
+      .filter((r) => {
+        const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
+        return payload.customer_id === customerId
+      })
+      .map((r) => {
+        const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
+        const total = Number(payload.total ?? r.amount ?? 0)
+        const discount = Number(payload.discount ?? 0)
+        const paid = Number(payload.paid ?? total)
+        return {
+          id: r.id,
+          shop_id: r.shopId,
+          invoice_no: 0,
+          customer_id: customerId,
+          subtotal: total + discount,
+          discount,
+          total,
+          paid,
+          due: total - paid,
+          payment_method: (payload.payment_method as Sale['payment_method']) || 'cash',
+          status: 'completed',
+          note: (payload.note as string) || null,
+          void_reason: null,
+          sold_at: (payload.sold_at as string) || r.createdAt,
+          created_by: null,
+          client_uuid: (payload.client_uuid as string) || r.id,
+          created_at: r.createdAt,
+          updated_at: r.createdAt,
+        }
+      })
+  } catch {
+    // Ignore outbox read failures
+  }
+
+  const existingUuids = new Set(rows.map((r) => r.client_uuid).filter(Boolean))
+  const uniquePending = pendingSales.filter((p) => !existingUuids.has(p.client_uuid))
+
+  return [...uniquePending, ...rows].slice(0, limit)
 }
 
 export interface PurchaseItemWithProduct extends PurchaseItem {

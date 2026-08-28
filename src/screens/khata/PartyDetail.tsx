@@ -44,19 +44,19 @@ export default function PartyDetail() {
   const customerQuery = useQuery<CustomerDue>(
     id ? `party:${id}` : null,
     () => getCustomerDue(id!),
-    { staleMs: 30_000, onSync: true },
+    { staleMs: 5_000, onSync: true },
   )
 
   const ledgerQuery = useQueryList<PartyLedgerEntry>(
     id ? `party:ledger:${id}` : null,
     () => listPartyLedger('customer', id!),
-    { staleMs: 30_000, onSync: true },
+    { staleMs: 5_000, onSync: true },
   )
 
   const salesQuery = useQueryList(
     id ? `party:sales:${id}` : null,
     () => listSalesForCustomer(id!, 20),
-    { staleMs: 60_000, onSync: true },
+    { staleMs: 5_000, onSync: true },
   )
 
   const writeOff = useWrite('set_opening_balance')

@@ -16,6 +16,8 @@ import { cn, newId } from '@/lib/utils'
 import { useShop } from '@/providers/ShopProvider'
 import { BarcodeScannerModal } from '@/components/scanner/BarcodeScannerModal'
 import { VoiceSearchModal } from '@/components/voice/VoiceSearchModal'
+import { invalidateCacheKey, invalidateCachePrefix } from '@/offline/db'
+import { sync } from '@/offline/sync'
 import { PaySheet } from './PaySheet'
 import { ReceiptSheet } from './ReceiptSheet'
 import { type CartAction, type CartLine, cartTotals, lineTotal, toSalePayload } from './cart'
@@ -151,6 +153,13 @@ export default function Sell() {
     forgetStoredCart()
     // Stock is now wrong by exactly what was just sold.
     void catalog.refetch()
+
+    // Invalidate khata, dashboard, and customer caches so they reflect the new sale immediately
+    void invalidateCacheKey(shopId, 'party:customers')
+    void invalidateCacheKey(shopId, 'dashboard:today')
+    void invalidateCacheKey(shopId, 'sales:recent')
+    void invalidateCachePrefix(shopId, 'party:')
+    void sync.refresh()
   }
 
   const searching = query.trim().length > 0

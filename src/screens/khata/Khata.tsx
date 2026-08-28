@@ -33,7 +33,7 @@ export default function Khata() {
   const [collectCustomer, setCollectCustomer] = useState<CustomerDue | null>(null)
 
   const customersQuery = useQueryList('party:customers', listCustomerDues, {
-    staleMs: 60_000,
+    staleMs: 5_000,
     onSync: true,
   })
 

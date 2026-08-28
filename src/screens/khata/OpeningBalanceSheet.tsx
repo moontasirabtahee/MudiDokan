@@ -7,6 +7,8 @@ import { useWrite } from '@/hooks/useWrite'
 import { useI18n } from '@/i18n/I18nProvider'
 import type { CustomerDue } from '@/lib/database.types'
 import { newId } from '@/lib/utils'
+import { invalidateCacheKey } from '@/offline/db'
+import { sync } from '@/offline/sync'
 import { useShop } from '@/providers/ShopProvider'
 
 export function OpeningBalanceSheet({
@@ -51,6 +53,11 @@ export function OpeningBalanceSheet({
     })
 
     if (outcome.ok) {
+      void invalidateCacheKey(shopId, 'party:customers')
+      void invalidateCacheKey(shopId, `party:${customer.id}`)
+      void invalidateCacheKey(shopId, `party:ledger:${customer.id}`)
+      void invalidateCacheKey(shopId, 'dashboard:today')
+      void sync.refresh()
       onSaved?.()
       onClose()
     }

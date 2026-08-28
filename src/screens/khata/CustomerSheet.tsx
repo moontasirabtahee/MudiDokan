@@ -9,6 +9,8 @@ import { useWrite } from '@/hooks/useWrite'
 import { useI18n } from '@/i18n/I18nProvider'
 import type { Customer, CustomerDue } from '@/lib/database.types'
 import { cleanPhoneForDialing, isBangladeshiPhone, newId } from '@/lib/utils'
+import { invalidateCacheKey } from '@/offline/db'
+import { sync } from '@/offline/sync'
 import { useShop } from '@/providers/ShopProvider'
 import { useToast } from '@/providers/ToastProvider'
 
@@ -93,6 +95,10 @@ export function CustomerSheet({
         })
       }
     }
+
+    void invalidateCacheKey(shopId, 'party:customers')
+    void invalidateCacheKey(shopId, `party:${savedCustomer.id}`)
+    void sync.refresh()
 
     onSaved?.(savedCustomer)
     onClose()

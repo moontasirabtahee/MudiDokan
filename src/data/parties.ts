@@ -24,11 +24,45 @@ import { listOutbox } from '@/offline/outbox'
  * their limit.
  */
 
+/** Calculates pending outbox debt adjustments for customers */
+async function getPendingCustomerDeltas(shopId?: string): Promise<Map<string, number>> {
+  const deltas = new Map<string, number>()
+  try {
+    const outboxRecords = await listOutbox(shopId ? { shopId } : undefined)
+    for (const r of outboxRecords) {
+      if (r.status === 'failed') continue
+      const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
+      if (r.op === 'create_sale' && payload.customer_id) {
+        const custId = String(payload.customer_id)
+        const items = (payload.items as Array<{ qty: number; unit_price: number; line_discount?: number }>) || []
+        let gross = 0
+        for (const it of items) {
+          gross += (it.qty * it.unit_price) - (it.line_discount || 0)
+        }
+        const total = Math.max(0, gross - Number(payload.discount || 0))
+        const paid = Number(payload.paid ?? total)
+        const due = Math.max(0, total - paid)
+        if (due > 0) {
+          deltas.set(custId, (deltas.get(custId) || 0) + due)
+        }
+      } else if (r.op === 'record_payment' && payload.customer_id) {
+        const custId = String(payload.customer_id)
+        const amount = Number(payload.amount || 0)
+        deltas.set(custId, (deltas.get(custId) || 0) - amount)
+      } else if (r.op === 'set_opening_balance' && payload.customer_id) {
+        const custId = String(payload.customer_id)
+        const amount = Number(payload.amount || 0)
+        deltas.set(custId, (deltas.get(custId) || 0) + amount)
+      }
+    }
+  } catch {
+    // Ignore outbox read failures
+  }
+  return deltas
+}
+
 export async function listCustomerDues(shopId: string): Promise<CustomerDue[]> {
-  // Everyone, not only the debtors: this list doubles as the customer directory,
-  // and a shopkeeper looking up a phone number should not have to remember whether
-  // that person happens to owe anything today.
-  return unwrap(
+  const rows = await unwrap(
     supabase
       .from('v_customer_dues')
       .select('*')
@@ -38,10 +72,33 @@ export async function listCustomerDues(shopId: string): Promise<CustomerDue[]> {
       .order('name')
       .limit(LIMITS.catalogMax),
   ).catch(() => [] as CustomerDue[])
+
+  const deltas = await getPendingCustomerDeltas(shopId)
+  if (deltas.size === 0) return rows
+
+  return rows.map((row) => {
+    const delta = deltas.get(row.id)
+    if (!delta) return row
+    const newBal = Math.max(0, row.due_balance + delta)
+    return {
+      ...row,
+      due_balance: newBal,
+      over_limit: row.credit_limit > 0 && newBal > row.credit_limit,
+    }
+  })
 }
 
 export async function getCustomerDue(customerId: string): Promise<CustomerDue> {
-  return unwrap(supabase.from('v_customer_dues').select('*').eq('id', customerId).single())
+  const row = await unwrap<CustomerDue>(supabase.from('v_customer_dues').select('*').eq('id', customerId).single())
+  const deltas = await getPendingCustomerDeltas()
+  const delta = deltas.get(customerId)
+  if (!delta) return row
+  const newBal = Math.max(0, row.due_balance + delta)
+  return {
+    ...row,
+    due_balance: newBal,
+    over_limit: row.credit_limit > 0 && newBal > row.credit_limit,
+  }
 }
 
 export async function listSupplierDues(shopId: string): Promise<SupplierDue[]> {
@@ -102,18 +159,28 @@ export async function listPartyLedger(
       return false
     })
 
-    pendingEntries = matching.map((r) => {
+    for (const r of matching) {
       const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
       let entryType: PartyLedgerEntry['entry_type'] = party === 'customer' ? 'payment_received' : 'payment_made'
       let amount = Number(payload.amount ?? r.amount ?? 0)
+
       if (r.op === 'create_sale') {
         entryType = 'credit_sale'
-        amount = Number(payload.total ?? r.amount ?? 0)
+        const items = (payload.items as Array<{ qty: number; unit_price: number; line_discount?: number }>) || []
+        let gross = 0
+        for (const it of items) {
+          gross += (it.qty * it.unit_price) - (it.line_discount || 0)
+        }
+        const total = Math.max(0, gross - Number(payload.discount || 0))
+        const paid = Number(payload.paid ?? total)
+        amount = Math.max(0, total - paid)
+        // If there was no due on this sale, it does not create a party ledger entry
+        if (amount <= 0) continue
       } else if (r.op === 'set_opening_balance') {
         entryType = (payload.entry_type as PartyLedgerEntry['entry_type']) || 'opening_balance'
       }
 
-      return {
+      pendingEntries.push({
         id: r.id,
         shop_id: r.shopId,
         party,
@@ -123,13 +190,13 @@ export async function listPartyLedger(
         amount,
         ref_table: null,
         ref_id: null,
-        balance_after: 0,
+        balance_after: rows[0]?.balance_after ?? 0,
         note: (payload.note as string) || null,
         occurred_at: (payload.occurred_at || payload.paid_at || payload.sold_at || r.createdAt) as string,
         created_by: null,
         created_at: r.createdAt,
-      }
-    })
+      })
+    }
   } catch {
     // Ignore outbox read failures
   }

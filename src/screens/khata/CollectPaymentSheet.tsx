@@ -57,6 +57,7 @@ export function CollectPaymentSheet({
           amount: paymentAmount,
           method,
           note: note.trim() || null,
+          paid_at: new Date().toISOString(),
         },
       },
       amount: paymentAmount,

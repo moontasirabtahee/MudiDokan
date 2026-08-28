@@ -55,19 +55,93 @@ export async function listSalesForDay(
       .lte('sold_at', `${addDays(day, SLACK_DAYS)}T23:59:59`)
       .order('sold_at', { ascending: false })
       .limit(LIMITS.ledgerPage * 3),
-  )
-  return rows.filter((row) => isoDay(row.sold_at, timeZone) === day)
+  ).catch(() => [] as Sale[])
+
+  let pendingSales: Sale[] = []
+  try {
+    const outboxRecords = await listOutbox({ shopId })
+    pendingSales = outboxRecords
+      .filter((r) => r.op === 'create_sale' && r.status !== 'failed')
+      .map((r) => {
+        const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
+        const total = Number(payload.total ?? r.amount ?? 0)
+        const discount = Number(payload.discount ?? 0)
+        return {
+          id: r.id,
+          shop_id: r.shopId,
+          invoice_no: null,
+          customer_id: (payload.customer_id as string) || null,
+          subtotal: total + discount,
+          discount,
+          total,
+          paid: Number(payload.paid ?? total),
+          change_due: 0,
+          payment_method: (payload.payment_method as Sale['payment_method']) || 'cash',
+          note: (payload.note as string) || null,
+          sold_at: (payload.sold_at as string) || r.createdAt,
+          created_by: null,
+          created_at: r.createdAt,
+          is_void: false,
+          client_uuid: (payload.client_uuid as string) || r.id,
+        } as Sale
+      })
+  } catch {
+    // Ignore outbox read failures
+  }
+
+  const existingUuids = new Set(rows.map((r) => r.client_uuid).filter(Boolean))
+  const uniquePending = pendingSales.filter((p) => !existingUuids.has(p.client_uuid))
+
+  const all = [...uniquePending, ...rows]
+  return all.filter((row) => isoDay(row.sold_at, timeZone) === day)
 }
 
 export async function listRecentSales(shopId: string, limit = 20): Promise<Sale[]> {
-  return unwrap(
+  const rows = await unwrap(
     supabase
       .from('sales')
       .select('*')
       .eq('shop_id', shopId)
       .order('sold_at', { ascending: false })
       .limit(limit),
-  )
+  ).catch(() => [] as Sale[])
+
+  let pendingSales: Sale[] = []
+  try {
+    const outboxRecords = await listOutbox({ shopId })
+    pendingSales = outboxRecords
+      .filter((r) => r.op === 'create_sale' && r.status !== 'failed')
+      .map((r) => {
+        const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
+        const total = Number(payload.total ?? r.amount ?? 0)
+        const discount = Number(payload.discount ?? 0)
+        return {
+          id: r.id,
+          shop_id: r.shopId,
+          invoice_no: null,
+          customer_id: (payload.customer_id as string) || null,
+          subtotal: total + discount,
+          discount,
+          total,
+          paid: Number(payload.paid ?? total),
+          change_due: 0,
+          payment_method: (payload.payment_method as Sale['payment_method']) || 'cash',
+          note: (payload.note as string) || null,
+          sold_at: (payload.sold_at as string) || r.createdAt,
+          created_by: null,
+          created_at: r.createdAt,
+          is_void: false,
+          client_uuid: (payload.client_uuid as string) || r.id,
+        } as Sale
+      })
+  } catch {
+    // Ignore outbox read failures
+  }
+
+  const existingUuids = new Set(rows.map((r) => r.client_uuid).filter(Boolean))
+  const uniquePending = pendingSales.filter((p) => !existingUuids.has(p.client_uuid))
+
+  return [...uniquePending, ...rows].slice(0, limit)
 }
 
 export async function getSale(saleId: string): Promise<SaleWithItems> {
@@ -86,7 +160,7 @@ export async function listSalesForCustomer(customerId: string, limit = 20): Prom
       .eq('customer_id', customerId)
       .order('sold_at', { ascending: false })
       .limit(limit),
-  )
+  ).catch(() => [] as Sale[])
 }
 
 export interface PurchaseItemWithProduct extends PurchaseItem {
@@ -99,14 +173,48 @@ export interface PurchaseWithItems extends Purchase {
 }
 
 export async function listPurchases(shopId: string, limit = LIMITS.pageSize): Promise<Purchase[]> {
-  return unwrap(
+  const rows = await unwrap(
     supabase
       .from('purchases')
       .select('*')
       .eq('shop_id', shopId)
       .order('purchased_at', { ascending: false })
       .limit(limit),
-  )
+  ).catch(() => [] as Purchase[])
+
+  let pendingPurchases: Purchase[] = []
+  try {
+    const outboxRecords = await listOutbox({ shopId })
+    pendingPurchases = outboxRecords
+      .filter((r) => r.op === 'create_purchase' && r.status !== 'failed')
+      .map((r) => {
+        const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
+        const total = Number(payload.total ?? r.amount ?? 0)
+        const discount = Number(payload.discount ?? 0)
+        return {
+          id: r.id,
+          shop_id: r.shopId,
+          supplier_id: (payload.supplier_id as string) || null,
+          supplier_ref: (payload.supplier_ref as string) || null,
+          subtotal: total + discount,
+          discount,
+          total,
+          paid: Number(payload.paid ?? total),
+          note: (payload.note as string) || null,
+          purchased_at: (payload.purchased_at as string) || r.createdAt,
+          created_by: null,
+          created_at: r.createdAt,
+          client_uuid: (payload.client_uuid as string) || r.id,
+        } as Purchase
+      })
+  } catch {
+    // Ignore outbox read failures
+  }
+
+  const existingUuids = new Set(rows.map((r) => r.client_uuid).filter(Boolean))
+  const uniquePending = pendingPurchases.filter((p) => !existingUuids.has(p.client_uuid))
+
+  return [...uniquePending, ...rows].slice(0, limit)
 }
 
 export async function getPurchase(purchaseId: string): Promise<PurchaseWithItems> {
@@ -135,8 +243,42 @@ export async function listPaymentsForDay(
       .lte('paid_at', `${addDays(day, SLACK_DAYS)}T23:59:59`)
       .order('paid_at', { ascending: false })
       .limit(LIMITS.ledgerPage),
-  )
-  return rows.filter((row) => isoDay(row.paid_at, timeZone) === day)
+  ).catch(() => [] as Payment[])
+
+  let pendingPayments: Payment[] = []
+  try {
+    const outboxRecords = await listOutbox({ shopId })
+    pendingPayments = outboxRecords
+      .filter((r) => r.op === 'record_payment' && r.status !== 'failed')
+      .map((r) => {
+        const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
+        return {
+          id: r.id,
+          shop_id: r.shopId,
+          party: (payload.party as Payment['party']) || 'customer',
+          direction: (payload.direction as Payment['direction']) || 'in',
+          customer_id: (payload.customer_id as string) || null,
+          supplier_id: (payload.supplier_id as string) || null,
+          amount: Number(payload.amount ?? r.amount ?? 0),
+          method: (payload.method as Payment['method']) || 'cash',
+          sale_id: (payload.sale_id as string) || null,
+          purchase_id: (payload.purchase_id as string) || null,
+          note: (payload.note as string) || null,
+          paid_at: (payload.paid_at as string) || r.createdAt,
+          created_by: null,
+          created_at: r.createdAt,
+          client_uuid: (payload.client_uuid as string) || r.id,
+        } as Payment
+      })
+  } catch {
+    // Ignore outbox read failures
+  }
+
+  const existingUuids = new Set(rows.map((r) => r.client_uuid).filter(Boolean))
+  const uniquePending = pendingPayments.filter((p) => !existingUuids.has(p.client_uuid))
+
+  const all = [...uniquePending, ...rows]
+  return all.filter((row) => isoDay(row.paid_at, timeZone) === day)
 }
 
 /* ── Expenses ───────────────────────────────────────────────────────────── */

@@ -82,6 +82,7 @@ export function SupplierSheet({
               amount: openingBalance,
               entry_type: 'opening_balance',
               note: null,
+              occurred_at: new Date().toISOString(),
             },
           },
           amount: openingBalance,

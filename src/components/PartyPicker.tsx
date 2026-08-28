@@ -219,6 +219,7 @@ export function NewCustomerSheet({
               party: 'customer',
               customer_id: customer.id,
               amount: opening,
+              occurred_at: new Date().toISOString(),
             },
           },
           amount: opening,

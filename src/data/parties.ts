@@ -7,6 +7,7 @@ import type {
 } from '@/lib/database.types'
 import { LIMITS } from '@/lib/constants'
 import { supabase, unwrap } from '@/lib/supabase'
+import { listOutbox } from '@/offline/outbox'
 
 /**
  * The khata: customers who owe, suppliers who are owed, and the entries behind
@@ -36,7 +37,7 @@ export async function listCustomerDues(shopId: string): Promise<CustomerDue[]> {
       .order('due_balance', { ascending: false })
       .order('name')
       .limit(LIMITS.catalogMax),
-  )
+  ).catch(() => [] as CustomerDue[])
 }
 
 export async function getCustomerDue(customerId: string): Promise<CustomerDue> {
@@ -53,7 +54,7 @@ export async function listSupplierDues(shopId: string): Promise<SupplierDue[]> {
       .order('due_balance', { ascending: false })
       .order('name')
       .limit(LIMITS.catalogMax),
-  )
+  ).catch(() => [] as SupplierDue[])
 }
 
 export async function getSupplierDue(supplierId: string): Promise<SupplierDue> {
@@ -73,7 +74,7 @@ export async function listPartyLedger(
   partyId: string,
 ): Promise<PartyLedgerEntry[]> {
   const column = party === 'customer' ? 'customer_id' : 'supplier_id'
-  return unwrap(
+  const rows = await unwrap(
     supabase
       .from('party_ledger')
       .select('*')
@@ -81,7 +82,60 @@ export async function listPartyLedger(
       .order('occurred_at', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(LIMITS.ledgerPage),
-  )
+  ).catch(() => [] as PartyLedgerEntry[])
+
+  let pendingEntries: PartyLedgerEntry[] = []
+  try {
+    const outboxRecords = await listOutbox()
+    const matching = outboxRecords.filter((r) => {
+      if (r.status === 'failed') return false
+      const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
+      if (r.op === 'record_payment') {
+        return party === 'customer' ? payload.customer_id === partyId : payload.supplier_id === partyId
+      }
+      if (r.op === 'set_opening_balance') {
+        return party === 'customer' ? payload.customer_id === partyId : payload.supplier_id === partyId
+      }
+      if (r.op === 'create_sale' && party === 'customer') {
+        return payload.customer_id === partyId
+      }
+      return false
+    })
+
+    pendingEntries = matching.map((r) => {
+      const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
+      let entryType: PartyLedgerEntry['entry_type'] = 'payment'
+      let amount = Number(payload.amount ?? r.amount ?? 0)
+      if (r.op === 'create_sale') {
+        entryType = 'sale'
+        amount = Number(payload.total ?? r.amount ?? 0)
+      } else if (r.op === 'set_opening_balance') {
+        entryType = (payload.entry_type as PartyLedgerEntry['entry_type']) || 'opening_balance'
+      }
+
+      return {
+        id: r.id,
+        shop_id: r.shopId,
+        customer_id: party === 'customer' ? partyId : null,
+        supplier_id: party === 'supplier' ? partyId : null,
+        entry_type: entryType,
+        amount,
+        balance_after: 0,
+        ref_id: null,
+        note: (payload.note as string) || null,
+        occurred_at: (payload.occurred_at || payload.paid_at || payload.sold_at || r.createdAt) as string,
+        created_at: r.createdAt,
+        client_uuid: (payload.client_uuid as string) || r.id,
+      } as PartyLedgerEntry
+    })
+  } catch {
+    // Ignore outbox read failures
+  }
+
+  const existingUuids = new Set(rows.map((r) => r.client_uuid).filter(Boolean))
+  const uniquePending = pendingEntries.filter((p) => !existingUuids.has(p.client_uuid))
+
+  return [...uniquePending, ...rows]
 }
 
 /* ── Writes that are not queueable ──────────────────────────────────────── */

@@ -43,6 +43,7 @@ export function OpeningBalanceSheet({
           amount: amount,
           entry_type: 'opening_balance',
           note: note.trim() || null,
+          occurred_at: new Date().toISOString(),
         },
       },
       amount: amount,

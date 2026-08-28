@@ -106,6 +106,7 @@ export default function PartyDetail() {
           amount: -customer.due_balance,
           entry_type: 'write_off',
           note: null,
+          occurred_at: new Date().toISOString(),
         },
       },
       amount: customer.due_balance,

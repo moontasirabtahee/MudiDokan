@@ -95,6 +95,7 @@ export default function PurchaseNew() {
       items,
       paid: paid != null ? paid : subtotal,
       note: note.trim() || null,
+      purchased_at: new Date().toISOString(),
     }
 
     const outcome = await purchaseWrite.write({

@@ -4,10 +4,12 @@ import { Screen } from '@/components/layout/AppShell'
 import { Button, Fab, IconButton } from '@/components/ui/Button'
 import { Badge, EmptyState, ErrorState, SkeletonRows } from '@/components/ui/Feedback'
 import { SearchInput } from '@/components/ui/Field'
+import { Icon } from '@/components/ui/Icon'
 import { LocaleToggle } from '@/components/ui/LocaleToggle'
 import { Segmented, type SegmentedOption } from '@/components/ui/Segmented'
 import { listCustomerDues } from '@/data/parties'
 import { useQueryList } from '@/hooks/useQuery'
+import { useVoiceRecognition } from '@/hooks/useVoiceRecognition'
 import { useI18n } from '@/i18n/I18nProvider'
 import { LIMITS, detailPath } from '@/lib/constants'
 import type { CustomerDue } from '@/lib/database.types'
@@ -31,6 +33,16 @@ export default function Khata() {
 
   const [addOpen, setAddOpen] = useState(false)
   const [collectCustomer, setCollectCustomer] = useState<CustomerDue | null>(null)
+
+  const voice = useVoiceRecognition({
+    lang: 'bn-BD',
+    autoStopMs: 1500,
+    onResult: (spoken) => {
+      if (spoken.trim()) {
+        search(spoken.trim())
+      }
+    },
+  })
 
   const customersQuery = useQueryList('party:customers', listCustomerDues, {
     staleMs: 5_000,
@@ -103,29 +115,61 @@ export default function Khata() {
       }
     >
       {/* ── Summary Hero Card ────────────────────────────────────────────── */}
-      <div className="card p-4">
-        <span className="text-ink-soft text-sm">{t('khata.totalDue')}</span>
-        <p className="tnum text-warn mt-1 text-3xl font-bold">
+      <div className="card p-4 bg-gradient-to-br from-surface to-warn-soft/20 border border-rule shadow-card">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-warn-soft text-warn">
+              <Icon name="book" size={18} />
+            </span>
+            <span className="text-ink-soft text-sm font-semibold">{t('khata.totalDue')}</span>
+          </div>
+          {summary.overLimitCount > 0 ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-danger-soft text-danger text-xs font-bold border border-danger/20">
+              <Icon name="alert" size={12} />
+              {num(summary.overLimitCount)} {t('khata.overLimit')}
+            </span>
+          ) : null}
+        </div>
+
+        <p className="tnum text-warn mt-2 text-3xl font-extrabold tracking-tight">
           {money(summary.totalDue)}
         </p>
 
-        <div className="mt-2 flex items-center justify-between text-xs text-ink-faint">
+        <div className="mt-2.5 pt-2 border-t border-rule/50 flex items-center justify-between text-xs text-ink-faint">
           <span>{t('khata.customers', { count: num(summary.debtorCount) })}</span>
-          {summary.overLimitCount > 0 ? (
-            <span className="text-warn font-semibold">
-              {summary.overLimitCount} {t('khata.overLimit')}
-            </span>
-          ) : null}
+          <span>মোট খাতা: {num(customersQuery.rows.length)} জন</span>
         </div>
       </div>
 
       {/* ── Search & Filter Tabs ─────────────────────────────────────────── */}
-      <SearchInput
-        value={query}
-        onChange={search}
-        placeholder={t('common.searchPlaceholder')}
-        className="mt-3"
-      />
+      <div className="flex items-center gap-1.5 mt-3">
+        <div className="flex-1 min-w-0">
+          <SearchInput
+            value={query}
+            onChange={search}
+            placeholder={t('common.searchPlaceholder')}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => voice.toggle()}
+          title="মুখে বলে কাস্টমার খুঁজুন"
+          className={cn(
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-card border shadow-xs transition-all',
+            voice.isListening
+              ? 'bg-brand text-white border-brand scale-105 animate-pulse'
+              : 'bg-surface border-rule text-brand hover:bg-brand-soft',
+          )}
+        >
+          <Icon name={voice.isListening ? 'mic' : 'micOff'} size={20} />
+        </button>
+      </div>
+
+      {voice.isListening && (
+        <p className="text-center text-xs text-brand font-semibold animate-pulse mt-1.5">
+          🎙️ শুনছি... কাস্টমারের নাম বলুন
+        </p>
+      )}
 
       <Segmented
         value={tab}
@@ -161,34 +205,50 @@ export default function Khata() {
             {visible.map((c) => {
               const tone = agingTone(c.days_since_payment)
               const hasDue = c.due_balance > 0
+              const initial = (c.name || 'ক').charAt(0).toUpperCase()
 
               return (
                 <li key={c.id}>
                   <div
                     onClick={() => navigate(detailPath('party', c.id))}
-                    className="p-3.5 flex items-center justify-between hover:bg-canvas/50 cursor-pointer transition-colors"
+                    className="p-3.5 flex items-center justify-between hover:bg-canvas/50 cursor-pointer transition-colors gap-3"
                   >
-                    <div className="min-w-0 flex-1 pr-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-ink text-base truncate">
-                          {c.name}
-                        </span>
-                        {c.over_limit ? (
-                          <Badge tone="danger">{t('khata.overLimit')}</Badge>
-                        ) : null}
-                      </div>
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span
+                        className={cn(
+                          'flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-2xs',
+                          hasDue
+                            ? c.over_limit
+                              ? 'bg-danger-soft text-danger border border-danger/30'
+                              : 'bg-warn-soft text-warn border border-warn/30'
+                            : 'bg-brand-soft text-brand-deep border border-brand/20',
+                        )}
+                      >
+                        {initial}
+                      </span>
 
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-faint">
-                        {c.phone ? <span>{c.phone}</span> : null}
-                        {c.days_since_payment != null && hasDue ? (
-                          <span className={cn(tone === 'danger' && 'text-warn font-semibold')}>
-                            • {t('khata.sinceDays', { days: num(c.days_since_payment) })}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-ink text-base truncate">
+                            {c.name}
                           </span>
-                        ) : null}
+                          {c.over_limit ? (
+                            <Badge tone="danger">{t('khata.overLimit')}</Badge>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-faint">
+                          {c.phone ? <span>{c.phone}</span> : null}
+                          {c.days_since_payment != null && hasDue ? (
+                            <span className={cn(tone === 'danger' ? 'text-danger font-semibold' : 'text-ink-soft')}>
+                              • {t('khata.sinceDays', { days: num(c.days_since_payment) })}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <div className="text-right">
                         <p
                           className={cn(
@@ -201,28 +261,36 @@ export default function Khata() {
                           )}
                         >
                           {c.due_balance === 0
-                            ? '০'
+                            ? '৳০'
                             : money(Math.abs(c.due_balance))}
                         </p>
                         {c.due_balance < 0 ? (
-                          <p className="text-xs text-brand font-medium">
+                          <p className="text-[11px] text-brand font-semibold">
                             {t('khata.advance')}
+                          </p>
+                        ) : c.due_balance === 0 ? (
+                          <p className="text-[11px] text-ok font-medium">
+                            পরিশোধিত
                           </p>
                         ) : null}
                       </div>
 
                       {hasDue ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
+                        <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation()
                             setCollectCustomer(c)
                           }}
+                          className="px-3 py-1.5 text-xs font-bold rounded-lg bg-warn text-white hover:bg-warn/90 active:scale-95 transition-all shadow-2xs"
                         >
                           {t('khata.collect')}
-                        </Button>
-                      ) : null}
+                        </button>
+                      ) : (
+                        <span className="text-ink-faint">
+                          <Icon name="right" size="sm" />
+                        </span>
+                      )}
                     </div>
                   </div>
                 </li>
@@ -270,3 +338,4 @@ export default function Khata() {
     </Screen>
   )
 }
+

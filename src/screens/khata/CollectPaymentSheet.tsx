@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Badge, Divider, Row } from '@/components/ui/Feedback'
 import { Field, Input } from '@/components/ui/Field'
@@ -31,6 +31,15 @@ export function CollectPaymentSheet({
   const [amount, setAmount] = useState<number | null>(() => customer?.due_balance ?? null)
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [note, setNote] = useState('')
+
+  // Sync state when customer changes or sheet opens
+  useEffect(() => {
+    if (customer && open) {
+      setAmount(customer.due_balance > 0 ? customer.due_balance : null)
+      setMethod('cash')
+      setNote('')
+    }
+  }, [customer, open])
 
   const collect = useWrite<'record_payment', PaymentResult>('record_payment', {
     success: 'khata.collected',

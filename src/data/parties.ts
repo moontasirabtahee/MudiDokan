@@ -104,10 +104,10 @@ export async function listPartyLedger(
 
     pendingEntries = matching.map((r) => {
       const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
-      let entryType: PartyLedgerEntry['entry_type'] = 'payment'
+      let entryType: PartyLedgerEntry['entry_type'] = party === 'customer' ? 'payment_received' : 'payment_made'
       let amount = Number(payload.amount ?? r.amount ?? 0)
       if (r.op === 'create_sale') {
-        entryType = 'sale'
+        entryType = 'credit_sale'
         amount = Number(payload.total ?? r.amount ?? 0)
       } else if (r.op === 'set_opening_balance') {
         entryType = (payload.entry_type as PartyLedgerEntry['entry_type']) || 'opening_balance'
@@ -116,24 +116,26 @@ export async function listPartyLedger(
       return {
         id: r.id,
         shop_id: r.shopId,
+        party,
         customer_id: party === 'customer' ? partyId : null,
         supplier_id: party === 'supplier' ? partyId : null,
         entry_type: entryType,
         amount,
-        balance_after: 0,
+        ref_table: null,
         ref_id: null,
+        balance_after: 0,
         note: (payload.note as string) || null,
         occurred_at: (payload.occurred_at || payload.paid_at || payload.sold_at || r.createdAt) as string,
+        created_by: null,
         created_at: r.createdAt,
-        client_uuid: (payload.client_uuid as string) || r.id,
-      } as PartyLedgerEntry
+      }
     })
   } catch {
     // Ignore outbox read failures
   }
 
-  const existingUuids = new Set(rows.map((r) => r.client_uuid).filter(Boolean))
-  const uniquePending = pendingEntries.filter((p) => !existingUuids.has(p.client_uuid))
+  const existingIds = new Set(rows.map((r) => r.id))
+  const uniquePending = pendingEntries.filter((p) => !existingIds.has(p.id))
 
   return [...uniquePending, ...rows]
 }

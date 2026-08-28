@@ -66,24 +66,27 @@ export async function listSalesForDay(
         const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
         const total = Number(payload.total ?? r.amount ?? 0)
         const discount = Number(payload.discount ?? 0)
+        const paid = Number(payload.paid ?? total)
         return {
           id: r.id,
           shop_id: r.shopId,
-          invoice_no: null,
+          invoice_no: 0,
           customer_id: (payload.customer_id as string) || null,
           subtotal: total + discount,
           discount,
           total,
-          paid: Number(payload.paid ?? total),
-          change_due: 0,
+          paid,
+          due: total - paid,
           payment_method: (payload.payment_method as Sale['payment_method']) || 'cash',
+          status: 'completed',
           note: (payload.note as string) || null,
+          void_reason: null,
           sold_at: (payload.sold_at as string) || r.createdAt,
           created_by: null,
-          created_at: r.createdAt,
-          is_void: false,
           client_uuid: (payload.client_uuid as string) || r.id,
-        } as Sale
+          created_at: r.createdAt,
+          updated_at: r.createdAt,
+        }
       })
   } catch {
     // Ignore outbox read failures
@@ -115,24 +118,27 @@ export async function listRecentSales(shopId: string, limit = 20): Promise<Sale[
         const payload = (r.args as { payload?: Record<string, unknown> })?.payload || {}
         const total = Number(payload.total ?? r.amount ?? 0)
         const discount = Number(payload.discount ?? 0)
+        const paid = Number(payload.paid ?? total)
         return {
           id: r.id,
           shop_id: r.shopId,
-          invoice_no: null,
+          invoice_no: 0,
           customer_id: (payload.customer_id as string) || null,
           subtotal: total + discount,
           discount,
           total,
-          paid: Number(payload.paid ?? total),
-          change_due: 0,
+          paid,
+          due: total - paid,
           payment_method: (payload.payment_method as Sale['payment_method']) || 'cash',
+          status: 'completed',
           note: (payload.note as string) || null,
+          void_reason: null,
           sold_at: (payload.sold_at as string) || r.createdAt,
           created_by: null,
-          created_at: r.createdAt,
-          is_void: false,
           client_uuid: (payload.client_uuid as string) || r.id,
-        } as Sale
+          created_at: r.createdAt,
+          updated_at: r.createdAt,
+        }
       })
   } catch {
     // Ignore outbox read failures

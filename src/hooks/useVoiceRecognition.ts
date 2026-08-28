@@ -26,7 +26,7 @@ interface SpeechRecognitionEvent {
 
 export function useVoiceRecognition({
   lang = 'bn-BD',
-  autoStopMs = 2500,
+  autoStopMs = 4500,
   onResult,
 }: VoiceRecognitionOptions = {}) {
   const [isListening, setIsListening] = useState(false)
@@ -43,10 +43,13 @@ export function useVoiceRecognition({
   onResultRef.current = onResult
 
   const stoppedManuallyRef = useRef(false)
-  const finalTextRef = useRef('')
+  const accumulatedTextRef = useRef('')
+  const currentSegmentRef = useRef('')
   const silenceTimerRef = useRef<any>(null)
 
-  const fireResult = useCallback(async (fallbackText: string) => {
+  const fireResult = useCallback(async (fallbackSegment: string) => {
+    let segmentText = fallbackSegment.trim()
+
     // 1. If we recorded audio with MediaRecorder, transcribe with Groq Whisper
     if (audioChunksRef.current.length > 0) {
       const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'
@@ -58,13 +61,7 @@ export function useVoiceRecognition({
         try {
           const whisperText = await transcribeAudioWithWhisper(audioBlob)
           if (whisperText && whisperText.trim()) {
-            const cleanWhisper = whisperText.trim()
-            setTranscript(cleanWhisper)
-            setIsTranscribing(false)
-            if (onResultRef.current) {
-              onResultRef.current(cleanWhisper)
-            }
-            return
+            segmentText = whisperText.trim()
           }
         } catch (err) {
           console.warn('[voice] Whisper transcribe fallback:', err)
@@ -74,10 +71,24 @@ export function useVoiceRecognition({
       }
     }
 
-    // 2. Fallback to Web Speech API transcript if Whisper was empty or skipped
-    const cleaned = (fallbackText || finalTextRef.current).trim()
-    if (cleaned && onResultRef.current) {
-      onResultRef.current(cleaned)
+    if (segmentText) {
+      const prev = accumulatedTextRef.current.trim()
+      const combined = prev
+        ? prev.endsWith(',') || prev.endsWith('এবং') || prev.endsWith('আর')
+          ? `${prev} ${segmentText}`
+          : `${prev}, ${segmentText}`
+        : segmentText
+
+      accumulatedTextRef.current = combined
+      setTranscript(combined)
+
+      if (onResultRef.current) {
+        onResultRef.current(combined)
+      }
+    } else if (accumulatedTextRef.current) {
+      if (onResultRef.current) {
+        onResultRef.current(accumulatedTextRef.current)
+      }
     }
   }, [])
 
@@ -118,15 +129,17 @@ export function useVoiceRecognition({
         }
 
         if (sessionFinal) {
-          finalTextRef.current = (finalTextRef.current + ' ' + sessionFinal).trim()
+          currentSegmentRef.current = (currentSegmentRef.current + ' ' + sessionFinal).trim()
         }
 
-        const live = (finalTextRef.current + ' ' + interim).trim()
-        setTranscript(live)
+        const liveSegment = (currentSegmentRef.current + ' ' + interim).trim()
+        const prev = accumulatedTextRef.current.trim()
+        const liveFull = prev && liveSegment ? `${prev}, ${liveSegment}` : (liveSegment || prev)
+        setTranscript(liveFull)
 
         // Reset silence timer on incoming speech
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-        if (autoStopMs > 0 && live) {
+        if (autoStopMs > 0 && liveSegment) {
           silenceTimerRef.current = setTimeout(() => {
             if (!stoppedManuallyRef.current) {
               stop()
@@ -157,9 +170,8 @@ export function useVoiceRecognition({
 
   const start = useCallback(async () => {
     stoppedManuallyRef.current = false
-    finalTextRef.current = ''
+    currentSegmentRef.current = ''
     audioChunksRef.current = []
-    setTranscript('')
     setIsListening(true)
 
     // 1. Start audio stream recording for Whisper
@@ -212,24 +224,25 @@ export function useVoiceRecognition({
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.onstop = () => {
         cleanupStream()
-        void fireResult(finalTextRef.current)
+        void fireResult(currentSegmentRef.current)
       }
       try {
         mediaRecorderRef.current.stop()
       } catch {
         cleanupStream()
-        void fireResult(finalTextRef.current)
+        void fireResult(currentSegmentRef.current)
       }
     } else {
       cleanupStream()
-      void fireResult(finalTextRef.current)
+      void fireResult(currentSegmentRef.current)
     }
   }, [cleanupStream, fireResult])
 
   const reset = useCallback(() => {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
     cleanupStream()
-    finalTextRef.current = ''
+    accumulatedTextRef.current = ''
+    currentSegmentRef.current = ''
     audioChunksRef.current = []
     setTranscript('')
     setIsListening(false)

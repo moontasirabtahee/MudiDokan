@@ -46,11 +46,20 @@ export function VoiceSearchModal({
       setMatchedItems([])
       setAiProcessing(false)
       setProcessedText('')
-      voice.start()
+      voice.reset()
+      void voice.start()
     } else {
       voice.stop()
     }
   }, [open])
+
+  function handleReset() {
+    setMatchedItems([])
+    setAiProcessing(false)
+    setProcessedText('')
+    voice.reset()
+    void voice.start()
+  }
 
   async function handleSpoken(spoken: string) {
     if (!spoken.trim() || spoken.trim() === processedText) return
@@ -166,7 +175,19 @@ export function VoiceSearchModal({
               <p className="text-xs text-ink-soft">এক বা একাধিক পণ্যের নাম ও পরিমাণ বলুন</p>
             </div>
           </div>
-          <IconButton name="close" label="Close" variant="ghost" onClick={onClose} />
+          <div className="flex items-center gap-1.5">
+            {(matchedItems.length > 0 || voice.transcript) && (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-canvas border border-rule text-ink-soft hover:text-ink hover:border-brand/40 transition-all"
+                title="নতুন করে শুরু করুন"
+              >
+                নতুন করে
+              </button>
+            )}
+            <IconButton name="close" label="Close" variant="ghost" onClick={onClose} />
+          </div>
         </div>
 
         {/* Mic Pulse Button */}

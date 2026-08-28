@@ -47,8 +47,8 @@ export interface CatalogProductSummary {
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_WHISPER_URL = 'https://api.groq.com/openai/v1/audio/transcriptions'
-const GROQ_MODEL = 'openai/gpt-oss-20b'
-const GROQ_FALLBACK_MODELS = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'qwen/qwen3.6-27b']
+const GROQ_MODEL = 'qwen/qwen3.6-27b'
+const GROQ_FALLBACK_MODELS = ['qwen/qwen3.8-27b', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b']
 const GROQ_WHISPER_MODEL = 'whisper-large-v3-turbo'
 
 /**

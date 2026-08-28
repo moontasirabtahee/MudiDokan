@@ -179,32 +179,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       displayName: profile?.full_name?.trim() || user?.email?.split('@')[0] || '',
 
       async signIn(email, password) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim().toLowerCase(),
+        const cleanEmail = email.trim().toLowerCase()
+        const promise = supabase.auth.signInWithPassword({
+          email: cleanEmail,
           password,
         })
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new AppError('offline', 'error.network')), 15000),
+        )
+        const { data, error } = await Promise.race([promise, timeoutPromise])
         if (error) throw authError(error)
+        if (data?.session) {
+          setSession(data.session)
+          setStatus('signedIn')
+          if (data.user) void loadProfile(data.user.id)
+        }
       },
 
       async signUp({ email, password, fullName, phone }) {
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim().toLowerCase(),
+        const cleanEmail = email.trim().toLowerCase()
+        const promise = supabase.auth.signUp({
+          email: cleanEmail,
           password,
           // Read by `handle_new_user()` to populate the profiles row, so the app
           // never has to handle an authenticated user with no profile.
           options: { data: { full_name: fullName.trim(), phone: phone?.trim() || null } },
         })
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new AppError('offline', 'error.network')), 15000),
+        )
+        const { data, error } = await Promise.race([promise, timeoutPromise])
         if (error) throw authError(error)
-        return data.session ? { session: true } : { session: false, reason: 'auth.confirmEmail' }
+        if (data?.session) {
+          setSession(data.session)
+          setStatus('signedIn')
+          if (data.user) void loadProfile(data.user.id)
+        }
+        return data?.session ? { session: true } : { session: false, reason: 'auth.confirmEmail' }
       },
 
       async signOut() {
         // Caches and the outbox are not touched here. Clearing them is
         // `ShopProvider`'s call, and unsent sales are never thrown away by a
         // sign-out — the settings screen blocks the button while any are waiting.
+        setSession(null)
+        setStatus('signedOut')
+        setProfile(null)
         const { error } = await supabase.auth.signOut()
         if (error) throw authError(error)
-        setProfile(null)
       },
 
       async sendPasswordReset(email) {

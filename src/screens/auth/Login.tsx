@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useI18n } from '@/i18n/I18nProvider'
 import { errorMessage } from '@/i18n/strings'
@@ -22,7 +22,7 @@ import { AuthLayout } from './AuthLayout'
  */
 export default function Login() {
   const { t, locale } = useI18n()
-  const { signIn, sendPasswordReset } = useAuth()
+  const { status, signIn, sendPasswordReset } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
   const location = useLocation()
@@ -36,13 +36,27 @@ export default function Login() {
   // the shopkeeper to the khata he was in the middle of rather than the dashboard.
   const from = (location.state as { from?: string } | null)?.from
 
+  // Automatically transition if session is already active or signed in
+  useEffect(() => {
+    if (status === 'signedIn') {
+      navigate(from && from !== ROUTES.login ? from : ROUTES.home, { replace: true })
+    }
+  }, [status, navigate, from])
+
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault()
     if (busy) return
     setError(null)
+
+    const cleanEmail = email.trim()
+    if (!cleanEmail || !password) {
+      setError(t('error.required'))
+      return
+    }
+
     setBusy(true)
     try {
-      await signIn(email.trim(), password)
+      await signIn(cleanEmail, password)
       navigate(from && from !== ROUTES.login ? from : ROUTES.home, { replace: true })
     } catch (thrown) {
       // Inline, not a toast. A wrong password is about the form the user is looking
@@ -59,12 +73,13 @@ export default function Login() {
   }
 
   async function onForgot() {
-    if (!email.trim()) {
+    const cleanEmail = email.trim()
+    if (!cleanEmail) {
       setError(t('error.invalidEmail'))
       return
     }
     try {
-      await sendPasswordReset(email.trim())
+      await sendPasswordReset(cleanEmail)
       toast.say('auth.resetSent')
     } catch (thrown) {
       toast.fail(thrown)

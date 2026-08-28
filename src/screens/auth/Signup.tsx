@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useI18n } from '@/i18n/I18nProvider'
 import { errorMessage } from '@/i18n/strings'
@@ -23,7 +23,7 @@ import { AuthLayout } from './AuthLayout'
  */
 export default function Signup() {
   const { t, locale } = useI18n()
-  const { signUp } = useAuth()
+  const { status, signUp } = useAuth()
   const navigate = useNavigate()
 
   const [fullName, setFullName] = useState('')
@@ -33,6 +33,13 @@ export default function Signup() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [checkEmail, setCheckEmail] = useState(false)
+
+  // If already signed in, redirect to onboarding or home
+  useEffect(() => {
+    if (status === 'signedIn') {
+      navigate(ROUTES.onboarding, { replace: true })
+    }
+  }, [status, navigate])
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault()

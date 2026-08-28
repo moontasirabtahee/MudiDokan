@@ -1,0 +1,84 @@
+# MudiDokan — Supabase CLI configuration
+#
+# `supabase start` brings the whole stack up locally: Postgres with the
+# migrations applied, GoTrue, PostgREST, Realtime and Studio. `supabase db reset`
+# replays every migration from scratch and then runs seed.sql, which is the
+# fastest way to check that a schema change actually applies cleanly rather than
+# only looking correct.
+
+project_id = "mudidokan"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+# `app` is deliberately absent. The RLS helper functions live there precisely so
+# they are NOT reachable from the browser; exposing the schema would undo that.
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# The schema uses `security_invoker` on views and generated columns, both of
+# which need 15 or newer.
+major_version = 15
+
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+# Catches outbound mail locally so invite and reset flows can be tested without
+# a provider. Open http://127.0.0.1:54324.
+[local_smtp]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+# Product photos only, and they are optional everywhere in the UI. Data is
+# expensive on the target devices, so nothing in this product requires an upload.
+file_size_limit = "5MiB"
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:5173"
+additional_redirect_urls = ["http://127.0.0.1:5173", "http://localhost:5173"]
+jwt_expiry = 3600
+# On by default, and it matters more here than in most products: a shopkeeper on
+# a shared shop phone should not be re-typing a password every hour.
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+minimum_password_length = 6
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+# False for local development only. Turn this ON in production, or the invite
+# flow can be used to bind a membership to an address nobody controls.
+enable_confirmations = false
+secure_password_change = false
+
+# Phone OTP is the right long-term answer for this market — a shopkeeper knows
+# his mobile number and may not have an email address he uses. It stays off until
+# there is a paid SMS provider behind it, because a login flow that silently
+# fails to deliver is worse than one that never promised.
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+[analytics]
+enabled = false

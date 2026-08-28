@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="মুদি দোকান">
+  <rect width="512" height="512" rx="96" fill="#0A6E52"/>
+  <g transform="translate(0 0) scale(1.0000)">
+    <!-- khata page -->
+    <rect x="104" y="88" width="304" height="336" rx="20" fill="#FBFAF6"/>
+    <!-- red margin rule, the pen shopkeepers use for baki -->
+    <rect x="150" y="88" width="9" height="336" fill="#C2261E"/>
+    <!-- ruled lines -->
+    <g fill="#D8DEE6">
+      <rect x="182" y="168" width="196" height="10" rx="5"/>
+      <rect x="182" y="232" width="196" height="10" rx="5"/>
+      <rect x="182" y="296" width="140" height="10" rx="5"/>
+    </g>
+    <!-- taka mark, set in shutter green -->
+    <text x="182" y="392" font-family="Hind Siliguri, system-ui, sans-serif"
+          font-size="86" font-weight="700" fill="#0A6E52">৳</text>
+  </g>
+</svg>

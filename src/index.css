@@ -1,0 +1,240 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Design tokens
+   Palette pulled from the shop itself, not from a UI kit:
+   the green of a shutter and a hand-painted signboard, the blue-black of a
+   ballpoint pen, the off-white of khata paper, and the red pen that is used
+   for one purpose only — money owed.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: light;
+
+  --brand: #0a6e52; /* shutter green */
+  --brand-deep: #064c39; /* pressed, headers */
+  --brand-soft: #e6f2ed; /* tinted fills */
+
+  --ink: #1b2430; /* ballpoint blue-black, never pure #000 */
+  --ink-soft: #4a5768;
+  --ink-faint: #8593a5;
+
+  --paper: #fbfaf6; /* khata paper */
+  --surface: #ffffff;
+  --rule: #d8dee6; /* ledger rule lines */
+
+  --danger: #c2261e; /* red pen — money owed, destructive actions. Rationed. */
+  --danger-soft: #fdecea;
+
+  --warn: #e5a419; /* turmeric — low stock, expiry */
+  --warn-soft: #fdf4e2;
+
+  --ok: #1e8f5e;
+  --ok-soft: #e8f6ef;
+
+  /* Safe areas so the bottom nav clears the iOS home indicator. */
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    /* No pull-to-refresh mid-sale: a shopkeeper scrolling a cart should never
+       lose the screen because his thumb travelled too far. */
+    overscroll-behavior-y: none;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+    margin: 0;
+    min-height: 100dvh;
+  }
+
+  /* Money and quantities align in columns. A khata whose numbers don't line up
+     is harder to read than paper, which would be an embarrassing regression. */
+  .tnum,
+  input[type='number'],
+  table {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  /* Visible keyboard focus everywhere, no exceptions. */
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Stop iOS Safari zooming the viewport when a field is focused: any input
+     below 16px triggers it, and a zoomed POS mid-rush is unusable. */
+  input,
+  select,
+  textarea,
+  button {
+    font-size: 16px;
+    font-family: inherit;
+  }
+
+  /* Hide the number-spinner stubs; we use explicit +/- steppers instead. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  ::selection {
+    background: var(--brand-soft);
+    color: var(--brand-deep);
+  }
+}
+
+@layer components {
+  /* ─────────────────────────────────────────────────────────────────────────
+     THE SIGNATURE ELEMENT — the ledger surface.
+     Real ruled-notebook paper, drawn in CSS, used only on the khata screens.
+     Recognition is the feature here: an owner should know what he is looking
+     at before he reads a word. Every other surface in the app stays quiet.
+     ───────────────────────────────────────────────────────────────────────── */
+  .ledger-surface {
+    background-color: var(--paper);
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 2.4375rem,
+      var(--rule) 2.4375rem,
+      var(--rule) 2.5rem
+    );
+    background-position: 0 0.0625rem;
+    position: relative;
+  }
+
+  /* The red margin rule, two-thirds of an inch in, exactly like the notebook. */
+  .ledger-surface::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 2.75rem;
+    width: 1.5px;
+    background: var(--danger);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  /* Statement rows sit on the rules: line-height must match the 2.5rem pitch. */
+  .ledger-row {
+    min-height: 2.5rem;
+    line-height: 2.5rem;
+  }
+
+  /* ── Cards ─────────────────────────────────────────────────────────────── */
+  .card {
+    @apply bg-surface rounded-card shadow-card border border-rule;
+  }
+
+  /* ── Scroll containers ─────────────────────────────────────────────────── */
+  .scroll-x {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .scroll-x::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ── Skeleton shimmer for cache-cold loads ─────────────────────────────── */
+  .skeleton {
+    @apply relative overflow-hidden rounded;
+    background-color: var(--rule);
+    opacity: 0.6;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.65), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  /* ── Bottom sheets ─────────────────────────────────────────────────────────
+     Every modal surface is a native <dialog>, so the backdrop is the browser's
+     rather than a div we position. Ink at 45%, not black: pure black over the
+     warm paper background reads as a hole in the screen.
+     ───────────────────────────────────────────────────────────────────────── */
+  dialog::backdrop {
+    background: rgb(27 36 48 / 0.45);
+    animation: fade-in 0.15s ease-out;
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: calc(var(--safe-b) + 0.5rem);
+  }
+  .pt-safe {
+    padding-top: var(--safe-t);
+  }
+  /* Content above the bottom nav. */
+  .pb-nav {
+    padding-bottom: calc(var(--safe-b) + theme('spacing.nav') + 1rem);
+  }
+  /* Content above a sticky action bar that itself sits above the nav — the sell
+     screen's charge button. Nothing may hide behind it, least of all the last
+     line of a cart. */
+  .pb-action {
+    padding-bottom: calc(var(--safe-b) + theme('spacing.nav') + 6rem);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Someone who has asked their phone to calm down gets a calm app. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Printed receipts and the daily closing sheet: drop the chrome, keep the data. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .card {
+    box-shadow: none;
+    border: 1px solid var(--rule);
+  }
+}

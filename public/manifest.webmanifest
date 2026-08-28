@@ -1,0 +1,23 @@
+{
+  "name": "মুদি দোকান — দোকানের হিসাব",
+  "short_name": "মুদি দোকান",
+  "description": "বাকির খাতা, মালের হিসাব আর দিনের লাভ — সব এক জায়গায়। ইন্টারনেট ছাড়াও চলে।",
+  "lang": "bn",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBFAF6",
+  "theme_color": "#0A6E52",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/maskable-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "দ্রুত বিক্রয়", "short_name": "বিক্রয়", "url": "/pos" },
+    { "name": "বাকির খাতা", "short_name": "বাকি", "url": "/khata" }
+  ]
+}

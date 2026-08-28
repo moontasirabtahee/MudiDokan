@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getDashboardToday } from '@/data/reports'
 import { listRecentSales } from '@/data/transactions'
@@ -27,19 +27,13 @@ export default function Home() {
   const day = today()
 
   const dash = useQuery<DashboardToday>('dashboard:today', getDashboardToday, {
-    staleMs: 0,
+    staleMs: 15_000,
     onSync: true,
   })
   const recent = useQueryList('sales:recent', (shopId) => listRecentSales(shopId, 6), {
-    staleMs: 0,
+    staleMs: 15_000,
     onSync: true,
   })
-
-  // Refetch when returning to home screen
-  useEffect(() => {
-    void dash.refetch()
-    void recent.refetch()
-  }, [])
 
   const d = dash.data
   const alerts = buildAlerts(d)

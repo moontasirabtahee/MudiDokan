@@ -284,6 +284,9 @@ export interface CacheRecord<T = unknown> {
   savedAt: number
 }
 
+// In-memory L1 cache: avoids IndexedDB transaction latency on repeated reads and tab switches.
+const memCache = new Map<string, CacheRecord<unknown>>()
+
 /**
  * Cache keys are `shopId:name`, so one shop's catalogue can never be served to
  * another — the cheapest possible guard against a staff member who works at two
@@ -298,36 +301,58 @@ export async function readCache<T>(
   name: string,
   maxAgeMs = SYNC.cacheTtlMs,
 ): Promise<{ data: T; savedAt: number } | null> {
-  const row = await getRecord<CacheRecord<T>>('cache', cacheKey(shopId, name))
+  const key = cacheKey(shopId, name)
+  const mem = memCache.get(key)
+  if (mem) {
+    if (Date.now() - mem.savedAt <= maxAgeMs) {
+      return { data: mem.data as T, savedAt: mem.savedAt }
+    }
+    memCache.delete(key)
+  }
+
+  const row = await getRecord<CacheRecord<T>>('cache', key)
   if (!row) return null
   if (Date.now() - row.savedAt > maxAgeMs) return null
+  memCache.set(key, row as CacheRecord<unknown>)
   return { data: row.data, savedAt: row.savedAt }
 }
 
 export async function writeCache<T>(shopId: string, name: string, data: T): Promise<void> {
-  await putRecord<CacheRecord<T>>('cache', {
-    key: cacheKey(shopId, name),
+  const key = cacheKey(shopId, name)
+  const record: CacheRecord<T> = {
+    key,
     shopId,
     data,
     savedAt: Date.now(),
-  })
+  }
+  memCache.set(key, record as CacheRecord<unknown>)
+  await putRecord<CacheRecord<T>>('cache', record)
 }
 
 export async function dropShopCache(shopId: string): Promise<void> {
+  for (const [key, row] of memCache.entries()) {
+    if (row.shopId === shopId) memCache.delete(key)
+  }
   const rows = await recordsByIndex<CacheRecord>('cache', 'by_shop', shopId)
   const backend = await db()
   await Promise.all(rows.map((row) => backend.del('cache', row.key)))
 }
 
 export async function invalidateCacheKey(shopId: string, name: string): Promise<void> {
+  const key = cacheKey(shopId, name)
+  memCache.delete(key)
   const backend = await db()
-  await backend.del('cache', cacheKey(shopId, name))
+  await backend.del('cache', key)
 }
 
 export async function invalidateCachePrefix(shopId: string, prefix: string): Promise<void> {
+  const target = `${shopId}:${prefix}`
+  for (const key of memCache.keys()) {
+    if (key.startsWith(target)) memCache.delete(key)
+  }
   const rows = await recordsByIndex<CacheRecord>('cache', 'by_shop', shopId)
   const backend = await db()
-  const matching = rows.filter((row) => row.key.startsWith(`${shopId}:${prefix}`))
+  const matching = rows.filter((row) => row.key.startsWith(target))
   await Promise.all(matching.map((row) => backend.del('cache', row.key)))
 }
 

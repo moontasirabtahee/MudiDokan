@@ -109,15 +109,15 @@ export function useQuery<T>(
       if (cache) {
         const hit = await readCache<T>(shopId, name)
         if (hit && mine()) {
+          const isFresh = !force && Date.now() - hit.savedAt < staleMs
           setSnapshot({
             data: hit.data,
             savedAt: hit.savedAt,
             error: null,
             loading: false,
-            refreshing: true,
+            refreshing: !isFresh,
           })
-          if (!force && Date.now() - hit.savedAt < staleMs) {
-            setSnapshot((previous) => ({ ...previous, refreshing: false }))
+          if (isFresh) {
             return
           }
         }

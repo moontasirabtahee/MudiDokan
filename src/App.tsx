@@ -1,34 +1,40 @@
+import { Suspense, lazy } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
-import { RequireAuth, RequireShop } from '@/components/layout/Guards'
+import { RequireAuth, RequireShop, Splash } from '@/components/layout/Guards'
 import { ROUTES } from '@/lib/constants'
-import AcceptInvite from '@/screens/auth/AcceptInvite'
-import Login from '@/screens/auth/Login'
-import Onboarding from '@/screens/auth/Onboarding'
-import Signup from '@/screens/auth/Signup'
-import Expenses from '@/screens/expenses/Expenses'
+
+// Core screens loaded eagerly for instant first paint
 import Home from '@/screens/Home'
-import Khata from '@/screens/khata/Khata'
-import PartyDetail from '@/screens/khata/PartyDetail'
-import ProductForm from '@/screens/products/ProductForm'
-import Products from '@/screens/products/Products'
-import Stock from '@/screens/products/Stock'
-import PurchaseDetail from '@/screens/purchases/PurchaseDetail'
-import PurchaseNew from '@/screens/purchases/PurchaseNew'
-import Purchases from '@/screens/purchases/Purchases'
-import Reports from '@/screens/reports/Reports'
 import Sell from '@/screens/sell/Sell'
-import Billing from '@/screens/settings/Billing'
-import Settings from '@/screens/settings/Settings'
-import Staff from '@/screens/settings/Staff'
-import StaffSales from '@/screens/settings/StaffSales'
-import SupplierDetail from '@/screens/suppliers/SupplierDetail'
-import Suppliers from '@/screens/suppliers/Suppliers'
+import Products from '@/screens/products/Products'
+import Khata from '@/screens/khata/Khata'
+import Login from '@/screens/auth/Login'
+import Signup from '@/screens/auth/Signup'
+
+// Secondary screens code-split on demand
+const Onboarding = lazy(() => import('@/screens/auth/Onboarding'))
+const AcceptInvite = lazy(() => import('@/screens/auth/AcceptInvite'))
+const ProductForm = lazy(() => import('@/screens/products/ProductForm'))
+const Stock = lazy(() => import('@/screens/products/Stock'))
+const PartyDetail = lazy(() => import('@/screens/khata/PartyDetail'))
+const Suppliers = lazy(() => import('@/screens/suppliers/Suppliers'))
+const SupplierDetail = lazy(() => import('@/screens/suppliers/SupplierDetail'))
+const Purchases = lazy(() => import('@/screens/purchases/Purchases'))
+const PurchaseNew = lazy(() => import('@/screens/purchases/PurchaseNew'))
+const PurchaseDetail = lazy(() => import('@/screens/purchases/PurchaseDetail'))
+const Expenses = lazy(() => import('@/screens/expenses/Expenses'))
+const Reports = lazy(() => import('@/screens/reports/Reports'))
+const Settings = lazy(() => import('@/screens/settings/Settings'))
+const Staff = lazy(() => import('@/screens/settings/Staff'))
+const StaffSales = lazy(() => import('@/screens/settings/StaffSales'))
+const Billing = lazy(() => import('@/screens/settings/Billing'))
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <Suspense fallback={<Splash />}>
+        <Routes>
         {/* ── Public / Auth Routes ───────────────────────────────────────── */}
         <Route path={ROUTES.login} element={<Login />} />
         <Route path={ROUTES.signup} element={<Signup />} />
@@ -81,6 +87,7 @@ export default function App() {
         {/* Fallback */}
         <Route path="*" element={<Navigate to={ROUTES.home} replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }

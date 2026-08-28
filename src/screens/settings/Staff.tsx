@@ -181,27 +181,40 @@ export default function Staff() {
                     </p>
                   </div>
 
-                  {can('owner') && !isMe ? (
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={m.role}
-                        onChange={(e) => void updateRole.run(m.id, e.target.value as MemberRole)}
-                        className="rounded-field border border-rule bg-canvas px-2 py-1 text-xs"
-                      >
-                        <option value="cashier">{ROLES.cashier[locale]}</option>
-                        <option value="manager">{ROLES.manager[locale]}</option>
-                        <option value="owner">{ROLES.owner[locale]}</option>
-                      </select>
-
+                  <div className="flex items-center gap-2">
+                    {m.user_id && can('manager') ? (
                       <button
                         type="button"
-                        onClick={() => void toggleStatus.run(m.id, !isDisabled)}
-                        className="text-xs text-ink-soft hover:text-warn"
+                        onClick={() => navigate(`/settings/staff/${m.user_id}/sales`)}
+                        className="text-xs font-semibold px-2.5 py-1 rounded-md bg-brand-soft text-brand-deep hover:bg-brand/20 transition-colors"
+                        title={t('settings.viewSales')}
                       >
-                        {isDisabled ? t('settings.enable') : t('settings.disable')}
+                        {t('settings.viewSales')}
                       </button>
-                    </div>
-                  ) : null}
+                    ) : null}
+
+                    {can('owner') && !isMe ? (
+                      <>
+                        <select
+                          value={m.role}
+                          onChange={(e) => void updateRole.run(m.id, e.target.value as MemberRole)}
+                          className="rounded-field border border-rule bg-canvas px-2 py-1 text-xs"
+                        >
+                          <option value="cashier">{ROLES.cashier[locale]}</option>
+                          <option value="manager">{ROLES.manager[locale]}</option>
+                          <option value="owner">{ROLES.owner[locale]}</option>
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={() => void toggleStatus.run(m.id, !isDisabled)}
+                          className="text-xs text-ink-soft hover:text-warn"
+                        >
+                          {isDisabled ? t('settings.enable') : t('settings.disable')}
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
                 </li>
               )
             })}

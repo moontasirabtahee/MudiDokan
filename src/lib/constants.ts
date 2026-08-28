@@ -45,6 +45,7 @@ export const ROUTES = {
   reports: '/reports',
   settings: '/settings',
   staff: '/settings/staff',
+  staffSales: '/settings/staff/:userId/sales',
   billing: '/settings/billing',
   login: '/login',
   signup: '/signup',

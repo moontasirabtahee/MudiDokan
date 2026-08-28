@@ -150,6 +150,32 @@ export async function listRecentSales(shopId: string, limit = 20): Promise<Sale[
   return [...uniquePending, ...rows].slice(0, limit)
 }
 
+/**
+ * Sales rung up by a specific staff member, identified by their auth user ID.
+ *
+ * Used by the owner's "staff sales" view — the same data a manager needs to
+ * settle up with a cashier at the end of the day, or verify that a discount
+ * was appropriate. `created_by` is populated by the RPC that creates the sale
+ * and can be null for sales that came in via an older client or the outbox —
+ * those will not appear here, which is acceptable: the purpose of this view is
+ * accountability, not a complete ledger.
+ */
+export async function listSalesByMember(
+  shopId: string,
+  userId: string,
+  limit = LIMITS.pageSize,
+): Promise<Sale[]> {
+  return unwrap(
+    supabase
+      .from('sales')
+      .select('*')
+      .eq('shop_id', shopId)
+      .eq('created_by', userId)
+      .order('sold_at', { ascending: false })
+      .limit(limit),
+  ).catch(() => [] as Sale[])
+}
+
 export async function getSale(saleId: string): Promise<SaleWithItems> {
   // One round trip for the receipt: the sale and its lines. The shape below is the
   // guarantee behind `unwrapAs` — `items` is the embedded `sale_items` rows.

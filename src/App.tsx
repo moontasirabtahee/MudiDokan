@@ -21,6 +21,7 @@ import Sell from '@/screens/sell/Sell'
 import Billing from '@/screens/settings/Billing'
 import Settings from '@/screens/settings/Settings'
 import Staff from '@/screens/settings/Staff'
+import StaffSales from '@/screens/settings/StaffSales'
 import SupplierDetail from '@/screens/suppliers/SupplierDetail'
 import Suppliers from '@/screens/suppliers/Suppliers'
 
@@ -71,6 +72,7 @@ export default function App() {
               {/* Settings */}
               <Route path={ROUTES.settings} element={<Settings />} />
               <Route path={ROUTES.staff} element={<Staff />} />
+              <Route path={ROUTES.staffSales} element={<StaffSales />} />
               <Route path={ROUTES.billing} element={<Billing />} />
             </Route>
           </Route>

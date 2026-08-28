@@ -73,7 +73,7 @@ export const emptyCart: CartState = {
 }
 
 export type CartAction =
-  | { type: 'add'; product: ProductStatus }
+  | { type: 'add'; product: ProductStatus; qty?: number }
   | { type: 'addCustom'; name: string; unitPrice: number; qty?: number; unit?: UnitType }
   | { type: 'qty'; key: string; qty: number | null }
   | { type: 'bump'; key: string; delta: number }
@@ -91,18 +91,12 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case 'add': {
       const product = action.product
+      const delta = action.qty != null && action.qty > 0 ? action.qty : 1
       const existing = state.lines.find((line) => line.product_id === product.id)
       if (existing) {
-        // Scanning the same barcode twice means two units, not a second line that
-        // has to be noticed and merged by a human.
-        //
-        // A whole unit even for weighed goods, deliberately. `qtyStep` is 50g,
-        // which is the right *nudge* for the +/- buttons and quite wrong here:
-        // tapping চাল twice means two kilos, and getting to two kilos by adding
-        // fifty grams at a time is forty taps.
         return mapLine(state, existing.key, (line) => ({
           ...line,
-          qty: clampQty(roundTo(line.qty + 1, 3)),
+          qty: clampQty(roundTo(line.qty + delta, 3)),
         }))
       }
       if (state.lines.length >= LIMITS.maxSaleLines) return state
@@ -113,17 +107,10 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
           {
             key: newId(),
             product_id: product.id,
-            // The Bengali name when there is one. This string is what the cart row
-            // and the receipt show, and a Bengali-first app that prints "Rice" on a
-            // receipt has quietly stopped being one. Only display: the payload sends
-            // `product_id` and lets the server name it.
             name: product.name_bn || product.name,
             unit: product.unit,
             weighted: product.is_weighted,
-            // One of whatever it is. For rice that is a kilo — the cashier then
-            // weighs it and types the real figure, which is the one interaction
-            // this screen cannot avoid.
-            qty: 1,
+            qty: clampQty(delta),
             unit_price: product.sell_price,
             buy_price: product.buy_price,
             line_discount: 0,

@@ -100,8 +100,8 @@ export default function Sell() {
 
   const editing = cart.lines.find((line) => line.key === editingKey) ?? null
 
-  function add(product: ProductStatus) {
-    dispatch({ type: 'add', product })
+  function add(product: ProductStatus, qty = 1) {
+    dispatch({ type: 'add', product, qty })
     // Clearing the query puts the cart back on screen, which is where the eye needs
     // to be to confirm what was just added.
     setQuery('')
@@ -184,9 +184,7 @@ export default function Sell() {
   }
 
   function handleVoiceProductSelected(product: ProductStatus, quantity: number) {
-    for (let i = 0; i < Math.max(1, Math.round(quantity)); i++) {
-      add(product)
-    }
+    add(product, quantity > 0 ? quantity : 1)
   }
 
   return (

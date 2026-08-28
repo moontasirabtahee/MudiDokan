@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getDashboardToday } from '@/data/reports'
 import { listRecentSales } from '@/data/transactions'
@@ -16,21 +16,6 @@ import { Icon, type IconName } from '@/components/ui/Icon'
 import { LocaleToggle } from '@/components/ui/LocaleToggle'
 import { DailyClosingSheet } from './reports/DailyClosingSheet'
 
-/**
- * The dashboard.
- *
- * Answers, in order: what came in today, what needs attention, what just happened.
- * That order is the whole design. A shopkeeper opens this app between customers,
- * for four seconds, and the question in his head is almost always "how did today
- * go" — so that is the first thing on screen, at the largest size on it, with no
- * chart in front of it.
- *
- * What a cashier sees is a smaller version of the same screen: takings yes, profit
- * no. Cost price is the owner's business, and in a shop where the cashier is a
- * nephew or a neighbour, putting margins on the family phone changes a relationship.
- * RLS enforces it; hiding the cards means a cashier sees a coherent app rather than
- * one full of refusals.
- */
 export default function Home() {
   const { t, money, moneyCompact, num, today, when } = useI18n()
   const { displayName } = useAuth()
@@ -41,14 +26,20 @@ export default function Home() {
   const showProfit = can('manager')
   const day = today()
 
-  const dash = useQuery<DashboardToday | null>('dashboard:today', getDashboardToday, {
-    staleMs: 30_000,
+  const dash = useQuery<DashboardToday>('dashboard:today', getDashboardToday, {
+    staleMs: 0,
     onSync: true,
   })
   const recent = useQueryList('sales:recent', (shopId) => listRecentSales(shopId, 6), {
-    staleMs: 60_000,
+    staleMs: 0,
     onSync: true,
   })
+
+  // Refetch when returning to home screen
+  useEffect(() => {
+    void dash.refetch()
+    void recent.refetch()
+  }, [])
 
   const d = dash.data
   const alerts = buildAlerts(d)
@@ -59,6 +50,15 @@ export default function Home() {
       actions={
         <>
           <LocaleToggle />
+          <IconButton
+            name="refresh"
+            label="রিফ্রেশ"
+            variant="ghost"
+            onClick={() => {
+              void dash.refetch()
+              void recent.refetch()
+            }}
+          />
           <IconButton
             name="settings"
             label={t('nav.settings')}
@@ -103,7 +103,15 @@ export default function Home() {
         {dash.loading && !d ? (
           <Skeleton className="mt-2 h-10 w-40" />
         ) : (
-          <p className="tnum text-ink mt-1 text-4xl font-bold">{money(d?.sales_total ?? 0)}</p>
+          <div className="flex items-baseline gap-2">
+            <p className="tnum text-ink mt-1 text-4xl font-bold">{money(d?.sales_total ?? 0)}</p>
+            {dash.refreshing && (
+              <span
+                title="আপডেট হচ্ছে…"
+                className="mb-0.5 h-2 w-2 rounded-full bg-brand animate-pulse self-end"
+              />
+            )}
+          </div>
         )}
 
         {/* Cash actually in hand is takings minus credit given plus dues collected.
@@ -111,7 +119,7 @@ export default function Home() {
         <div className="mt-3 grid grid-cols-2 gap-3">
           <Metric
             label={t('home.cashInHand')}
-            value={money(d?.collected_total ?? 0)}
+            value={money((d?.collected_total ?? 0) + (d?.dues_collected_today ?? 0))}
             tone="ok"
           />
           <Metric

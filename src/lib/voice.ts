@@ -10,6 +10,7 @@ export interface ParsedProduct {
 }
 
 export interface ParsedSellItem {
+  product_id?: string | null
   name: string
   name_bn: string
   quantity: number
@@ -36,23 +37,32 @@ export interface ParsedKhataEntry {
   type: 'payment_received' | 'credit_sale' | 'payment_made' | 'credit_purchase'
 }
 
+export interface CatalogProductSummary {
+  id: string
+  name: string
+  name_bn: string | null
+  unit: string
+  sell_price?: number
+}
+
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const GROQ_MODEL = 'openai/gpt-oss-20b'
-const GROQ_FALLBACK_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
+const GROQ_MODEL = 'llama-3.3-70b-versatile'
+const GROQ_FALLBACK_MODELS = ['llama-3.1-8b-instant', 'openai/gpt-oss-20b', 'mixtral-8x7b-32768']
 
 /* ── System Prompts ───────────────────────────────────────────────────────── */
 
 const SELL_CART_SYSTEM_PROMPT = `You are an AI assistant for a Bangladeshi grocery shop (মুদি দোকান).
 The shopkeeper will speak a list of one or more products sold to a customer in Bengali, English, or mixed.
-Extract ALL requested items into a JSON list.
+Extract ALL requested items into a JSON list. If a product catalog is provided, match each spoken item to the most relevant catalog product and set its product_id.
 
 Output ONLY valid JSON in this exact structure:
 {
   "items": [
     {
+      "product_id": "exact ID from provided catalog or null",
       "name": "product name in english/transliteration",
       "name_bn": "product name in Bengali script",
-      "quantity": number (e.g. 1, 2, 0.5, 1.5),
+      "quantity": number (e.g. 1, 2, 0.5, 1.5, 2.5),
       "unit": "kg" | "gram" | "litre" | "packet" | "dozen" | "hali" | "sack" | "piece"
     }
   ]
@@ -286,16 +296,30 @@ async function callGroqDirect(systemPrompt: string, userText: string): Promise<R
 /* ── Exported LLM Calling Functions ───────────────────────────────────────── */
 
 /**
- * Parses spoken text for Sell screen into a list of items to add to cart.
+ * Parses spoken text for Sell screen into a list of items to add to cart,
+ * intelligently matching against the shop's product database if provided.
  */
-export async function llmParseSellItems(transcript: string): Promise<ParsedSellItem[] | null> {
+export async function llmParseSellItems(
+  transcript: string,
+  catalog?: CatalogProductSummary[],
+): Promise<ParsedSellItem[] | null> {
   try {
-    let r = await callGroqDirect(SELL_CART_SYSTEM_PROMPT, transcript)
+    let systemPrompt = SELL_CART_SYSTEM_PROMPT
+    if (catalog && catalog.length > 0) {
+      const lines = catalog.slice(0, 250).map((p) => {
+        const bn = p.name_bn ? ` / ${p.name_bn}` : ''
+        const price = p.sell_price ? ` - ৳${p.sell_price}` : ''
+        return `- ID: "${p.id}" | Name: "${p.name}${bn}" | Unit: "${p.unit}"${price}`
+      })
+      systemPrompt += `\n\n### Current Shop Database Inventory (Match against these products):\n${lines.join('\n')}\n\nMatching Rules:\n1. If a spoken product matches or closely resembles an item in the Shop Database, set "product_id" to that exact product's ID string, and use that product's exact name.\n2. If the spoken product is not in the shop database, set "product_id" to null.\n3. Return quantity as a number and unit as one of the standard unit strings.`
+    }
+
+    let r = await callGroqDirect(systemPrompt, transcript)
 
     if (!r) {
       const { supabase } = await import('@/lib/supabase')
       const { data, error } = await supabase.functions.invoke('voice-parse', {
-        body: { transcript, mode: 'sell_cart' },
+        body: { transcript, mode: 'sell_cart', catalog: catalog?.slice(0, 100) },
       })
       if (!error && data?.result) r = data.result
     }
@@ -310,13 +334,14 @@ export async function llmParseSellItems(transcript: string): Promise<ParsedSellI
 
     for (const item of rawList) {
       if (typeof item !== 'object' || !item) continue
+      const product_id = typeof item.product_id === 'string' && item.product_id.trim() ? item.product_id.trim() : null
       const name = String(item.name || item.name_bn || item.productName || '').trim()
       const name_bn = String(item.name_bn || item.name || item.productName_bn || name).trim()
       const quantity = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1
       const unit = typeof item.unit === 'string' && validUnits.includes(item.unit) ? item.unit : 'piece'
 
-      if (name || name_bn) {
-        out.push({ name, name_bn, quantity, unit })
+      if (name || name_bn || product_id) {
+        out.push({ product_id, name, name_bn, quantity, unit })
       }
     }
 

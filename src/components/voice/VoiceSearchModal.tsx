@@ -57,8 +57,17 @@ export function VoiceSearchModal({
     setProcessedText(spoken.trim())
     setAiProcessing(true)
 
-    // 1. Send local transcript to LLM to extract JSON items list
-    let parsedList = await llmParseSellItems(spoken)
+    // 1. Send spoken transcript and database product catalog to LLM
+    let parsedList = await llmParseSellItems(
+      spoken,
+      products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        name_bn: p.name_bn,
+        unit: p.unit,
+        sell_price: p.sell_price,
+      })),
+    )
 
     // 2. Fallback to local regex multi-parser if offline
     if (!parsedList || parsedList.length === 0) {
@@ -69,18 +78,26 @@ export function VoiceSearchModal({
     const matches: MatchedCartItem[] = []
 
     for (const item of parsedList) {
-      const searchTarget = (item.name_bn || item.name).trim()
       let found: ProductStatus | null = null
 
-      if (searchTarget && products.length > 0) {
-        found =
-          products.find((p) => matchesSearch(searchTarget, p.name, p.name_bn, p.sku, p.barcode)) ??
-          products.find((p) => {
-            const pName = (p.name_bn || p.name).toLowerCase()
-            const sName = searchTarget.toLowerCase()
-            return pName.includes(sName) || sName.includes(pName)
-          }) ??
-          null
+      // First priority: Exact database product ID returned by LLM
+      if (item.product_id && products.length > 0) {
+        found = products.find((p) => p.id === item.product_id) ?? null
+      }
+
+      // Second priority: Fuzzy matching by name/SKU/barcode
+      if (!found && products.length > 0) {
+        const searchTarget = (item.name_bn || item.name).trim()
+        if (searchTarget) {
+          found =
+            products.find((p) => matchesSearch(searchTarget, p.name, p.name_bn, p.sku, p.barcode)) ??
+            products.find((p) => {
+              const pName = (p.name_bn || p.name).toLowerCase()
+              const sName = searchTarget.toLowerCase()
+              return pName.includes(sName) || sName.includes(pName)
+            }) ??
+            null
+        }
       }
 
       matches.push({
@@ -92,6 +109,16 @@ export function VoiceSearchModal({
 
     setMatchedItems(matches)
     setAiProcessing(false)
+  }
+
+  function updateQuantity(index: number, delta: number) {
+    setMatchedItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item
+        const newQty = Math.max(0.25, Math.round((item.quantity + delta) * 100) / 100)
+        return { ...item, quantity: newQty }
+      }),
+    )
   }
 
   function handleAddAll() {
@@ -226,15 +253,39 @@ export function VoiceSearchModal({
                     </div>
                   </div>
 
-                  {m.product && (
-                    <button
-                      type="button"
-                      onClick={() => handleAddSingle(m)}
-                      className="px-3.5 py-2 min-h-[44px] text-xs font-semibold rounded-lg bg-brand text-white hover:bg-brand-deep shadow-2xs shrink-0 active:scale-95 transition-all"
-                    >
-                      + যোগ
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center rounded-lg border border-rule bg-canvas">
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(idx, -1)}
+                        className="px-2 py-1 text-ink-soft hover:text-ink text-xs font-bold"
+                        title="কমান"
+                      >
+                        -
+                      </button>
+                      <span className="px-1 text-xs font-bold text-ink min-w-[24px] text-center tnum">
+                        {m.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(idx, 1)}
+                        className="px-2 py-1 text-ink-soft hover:text-ink text-xs font-bold"
+                        title="বাড়ান"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    {m.product && (
+                      <button
+                        type="button"
+                        onClick={() => handleAddSingle(m)}
+                        className="px-3 py-1.5 min-h-[36px] text-xs font-semibold rounded-lg bg-brand text-white hover:bg-brand-deep shadow-2xs shrink-0 active:scale-95 transition-all"
+                      >
+                        + যোগ
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

@@ -360,6 +360,22 @@ export default function ProductForm() {
                 />
               )}
             </Field>
+
+            {!editing ? (
+              <Field label={t('product.openingStock')} optional>
+                {({ id: fieldId, describedBy, invalid }) => (
+                  <NumericField
+                    id={fieldId}
+                    aria-describedby={describedBy}
+                    invalid={invalid}
+                    value={state.opening_stock ?? null}
+                    onChange={(opening_stock) => setState({ ...state, opening_stock })}
+                    decimals={state.is_weighted ? 3 : 0}
+                    disabled={!mayEdit}
+                  />
+                )}
+              </Field>
+            ) : null}
           </div>
 
           {/* ── The rest, which most products never need ─────────────────── */}

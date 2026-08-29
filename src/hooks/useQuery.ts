@@ -159,7 +159,7 @@ export function useQuery<T>(
   useSyncEvent(
     useCallback(
       (event) => {
-        if (onSync && active && event.type === 'sent') void load({ force: true })
+        if (onSync && active && (event.type === 'sent' || event.type === 'mutated')) void load({ force: true })
       },
       [active, load, onSync],
     ),

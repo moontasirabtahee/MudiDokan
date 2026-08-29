@@ -256,6 +256,7 @@ export const bn = {
   'product.sellPrice': 'বেচা দাম',
   'product.margin': 'লাভ',
   'product.stock': 'স্টক',
+  'product.openingStock': 'প্রাথমিক স্টক (দোকানে কতটুকু আছে)',
   'product.lowStockAt': 'কম হলে জানাবে',
   'product.expiry': 'তারিখ শেষ হবে',
   'product.barcode': 'বারকোড',

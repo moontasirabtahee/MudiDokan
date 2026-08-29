@@ -155,10 +155,9 @@ export default function Sell() {
     void catalog.refetch()
 
     // Invalidate khata, dashboard, and customer caches so they reflect the new sale immediately
-    void invalidateCacheKey(shopId, 'party:customers')
-    void invalidateCacheKey(shopId, 'dashboard:today')
-    void invalidateCacheKey(shopId, 'sales:recent')
-    void invalidateCachePrefix(shopId, 'party:')
+    await invalidateCachePrefix(shopId, 'party:')
+    await invalidateCacheKey(shopId, 'dashboard:today')
+    await invalidateCacheKey(shopId, 'sales:recent')
     void sync.refresh()
   }
 

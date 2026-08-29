@@ -61,9 +61,10 @@ export async function submit<K extends QueueableOp, T = unknown>(
   let watching: string | null = null
 
   const unsubscribe = engine.onEvent((event) => {
-    if (event.type === 'drained') return
-    seen.set(event.record.id, event)
-    if (watching && event.record.id === watching) resolveWait?.(event)
+    if ('record' in event) {
+      seen.set(event.record.id, event)
+      if (watching && event.record.id === watching) resolveWait?.(event)
+    }
   })
 
   let timer: ReturnType<typeof setTimeout> | undefined

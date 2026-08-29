@@ -110,11 +110,10 @@ export default function PurchaseNew() {
     })
 
     if (outcome.ok) {
-      void invalidateCacheKey(shopId, 'purchases:list')
-      void invalidateCacheKey(shopId, 'products:catalog')
-      void invalidateCacheKey(shopId, 'dashboard:today')
-      void invalidateCachePrefix(shopId, 'party:')
-      void invalidateCachePrefix(shopId, 'reports:')
+      await invalidateCachePrefix(shopId, 'products:')
+      await invalidateCachePrefix(shopId, 'party:')
+      await invalidateCacheKey(shopId, 'purchases:list')
+      await invalidateCacheKey(shopId, 'dashboard:today')
       if (outcome.result?.purchase.id) {
         navigate(detailPath('purchase', outcome.result.purchase.id))
       } else {

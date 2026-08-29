@@ -254,6 +254,7 @@ export const en: Dict = {
   'product.sellPrice': 'Selling price',
   'product.margin': 'Margin',
   'product.stock': 'Stock',
+  'product.openingStock': 'Initial Stock (Currently on shelf)',
   'product.lowStockAt': 'Warn me below',
   'product.expiry': 'Expiry date',
   'product.barcode': 'Barcode',

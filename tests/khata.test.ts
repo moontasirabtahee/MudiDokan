@@ -8,6 +8,7 @@ import {
   remainingDueAfterPayment,
 } from '@/screens/khata/khata-utils'
 import {
+  buildPaymentReceiptText,
   buildReminderText,
   smsUrl,
   statementText,
@@ -226,4 +227,45 @@ suite('khata statement text builder')
   ok(text.includes('শুরুর বাকি: +৳১,০০০'), 'statement includes opening balance line')
   ok(text.includes('জমা: -৳৪০০'), 'statement includes payment line')
   ok(text.includes('মোট বর্তমান বাকি: ৳৬০০'), 'statement includes total due')
+}
+
+suite('buildPaymentReceiptText')
+{
+  const fullPaidReceipt = buildPaymentReceiptText({
+    shopName: 'ভাই ভাই স্টোর',
+    customerName: 'করিম',
+    customerPhone: '01822222222',
+    previousDue: 1500,
+    amountPaid: 1500,
+    remainingDue: 0,
+    method: 'cash',
+    paidAt: '2026-08-28T10:00:00Z',
+    note: 'পুরো পরিশোধ',
+    locale: 'bn',
+    timeZone: 'Asia/Dhaka',
+  })
+
+  ok(fullPaidReceipt.includes('ভাই ভাই স্টোর'), 'receipt includes shop name')
+  ok(fullPaidReceipt.includes('করিম'), 'receipt includes customer name')
+  ok(fullPaidReceipt.includes('01822222222'), 'receipt includes customer phone')
+  ok(fullPaidReceipt.includes('পূর্বের বাকি: ৳১,৫০০'), 'receipt includes previous due')
+  ok(fullPaidReceipt.includes('জমা নেওয়া হয়েছে: ৳১,৫০০'), 'receipt includes amount paid')
+  ok(fullPaidReceipt.includes('সম্পূর্ণ পরিশোধ ✅'), 'receipt marks full payment clearly')
+  ok(fullPaidReceipt.includes('পুরো পরিশোধ'), 'receipt includes note')
+
+  const partialPaidReceipt = buildPaymentReceiptText({
+    shopName: 'ভাই ভাই স্টোর',
+    customerName: 'রহিম',
+    previousDue: 2000,
+    amountPaid: 500,
+    remainingDue: 1500,
+    method: 'bkash',
+    paidAt: '2026-08-28T10:00:00Z',
+    locale: 'bn',
+    timeZone: 'Asia/Dhaka',
+  })
+
+  ok(partialPaidReceipt.includes('বিকাশ'), 'receipt marks payment method')
+  ok(partialPaidReceipt.includes('জমা নেওয়া হয়েছে: ৳৫০০'), 'receipt includes partial amount')
+  ok(partialPaidReceipt.includes('অবশিষ্ট বাকি: ৳১,৫০০'), 'receipt calculates remaining due')
 }

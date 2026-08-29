@@ -92,9 +92,9 @@ export function ExpenseSheet({
     })
 
     if (outcome.ok) {
-      void invalidateCacheKey(shopId, 'dashboard:today')
-      void invalidateCachePrefix(shopId, 'reports:')
-      void invalidateCachePrefix(shopId, 'expenses:')
+      await invalidateCacheKey(shopId, 'dashboard:today')
+      await invalidateCachePrefix(shopId, 'reports:')
+      await invalidateCachePrefix(shopId, 'expenses:')
       onSaved?.()
       onClose()
     }

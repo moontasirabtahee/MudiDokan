@@ -29,6 +29,7 @@ export interface DraftState {
   low_stock_threshold: number | null
   expiry_date: string
   note: string
+  opening_stock?: number | null
 }
 
 export function emptyDraft(name = ''): DraftState {
@@ -45,6 +46,7 @@ export function emptyDraft(name = ''): DraftState {
     low_stock_threshold: DEFAULTS.lowStockThreshold,
     expiry_date: '',
     note: '',
+    opening_stock: null,
   }
 }
 
@@ -62,6 +64,7 @@ export function draftFromProduct(product: ProductStatus): DraftState {
     low_stock_threshold: product.low_stock_threshold,
     expiry_date: product.expiry_date ?? '',
     note: product.note ?? '',
+    opening_stock: null,
   }
 }
 
@@ -115,6 +118,10 @@ export function validateDraft(state: DraftState, today?: string): DraftCheck {
   if (state.buy_price !== null && state.buy_price < 0) errors.buy_price = 'error.invalidAmount'
 
   if (state.low_stock_threshold !== null && state.low_stock_threshold < 0) {
+    errors.low_stock_threshold = 'error.invalidAmount'
+  }
+
+  if (state.opening_stock !== null && state.opening_stock !== undefined && state.opening_stock < 0) {
     errors.low_stock_threshold = 'error.invalidAmount'
   }
 
@@ -178,6 +185,7 @@ export function toProductDraft(state: DraftState): ProductDraft {
     low_stock_threshold: state.low_stock_threshold ?? 0,
     expiry_date: orNull(state.expiry_date),
     note: orNull(state.note),
+    opening_stock: state.opening_stock ?? null,
   }
 }
 

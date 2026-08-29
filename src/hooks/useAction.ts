@@ -5,6 +5,7 @@ import { AppError } from '@/lib/supabase'
 import { useShop } from '@/providers/ShopProvider'
 import { useToast } from '@/providers/ToastProvider'
 import { useSyncState } from './useSync'
+import { sync } from '@/offline/sync'
 
 /**
  * The writes that cannot be queued.
@@ -95,6 +96,7 @@ export function useAction<A extends unknown[], T>(
       try {
         const result = await performRef.current(...args)
         if (success) toast.say(success, undefined, { kind: 'success' })
+        sync.notifyMutation()
         return { ok: true, result, error: null }
       } catch (error) {
         toast.fail(error)

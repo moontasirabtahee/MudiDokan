@@ -61,12 +61,8 @@ export function PaySupplierSheet({
     })
 
     if (outcome.ok) {
-      void invalidateCacheKey(shopId, 'party:suppliers')
-      void invalidateCacheKey(shopId, `party:${supplier.id}`)
-      void invalidateCacheKey(shopId, `party:ledger:${supplier.id}`)
-      void invalidateCacheKey(shopId, 'dashboard:today')
-      void invalidateCachePrefix(shopId, 'party:')
-      void invalidateCachePrefix(shopId, 'reports:')
+      await invalidateCachePrefix(shopId, 'party:')
+      await invalidateCacheKey(shopId, 'dashboard:today')
       onPaid?.()
       onClose()
     }

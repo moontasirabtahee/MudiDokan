@@ -1,5 +1,5 @@
 import type { CustomerDue, PartyLedgerEntry } from '@/lib/database.types'
-import { type Locale, formatDate, formatMoney } from '@/lib/format'
+import { type Locale, formatDate, formatDateTime, formatMoney } from '@/lib/format'
 import { cleanPhoneForDialing } from '@/lib/utils'
 
 export interface ReminderInput {
@@ -189,6 +189,70 @@ export function statementText({
       locale,
     )}`,
   )
+
+  return lines.join('\n')
+}
+
+export function buildPaymentReceiptText({
+  shopName,
+  customerName,
+  customerPhone,
+  previousDue,
+  amountPaid,
+  remainingDue,
+  method,
+  paidAt,
+  note,
+  locale = 'bn',
+  timeZone = 'Asia/Dhaka',
+}: {
+  shopName: string
+  customerName: string
+  customerPhone?: string | null
+  previousDue: number
+  amountPaid: number
+  remainingDue: number
+  method: string
+  paidAt: string
+  note?: string | null
+  locale?: Locale
+  timeZone?: string
+}): string {
+  const isBn = locale === 'bn'
+  const methodLabel =
+    method === 'bkash'
+      ? isBn ? 'বিকাশ' : 'bKash'
+      : method === 'nagad'
+        ? isBn ? 'নগদ (ডিজিটাল)' : 'Nagad'
+        : method === 'card'
+          ? isBn ? 'কার্ড' : 'Card'
+          : isBn ? 'নগদ' : 'Cash'
+  const isClear = remainingDue <= 0
+  const dateStr = formatDateTime(paidAt, locale, timeZone)
+
+  const lines: string[] = [
+    `🧾 *${shopName} — ${isBn ? 'বাকি জমা রশিদ' : 'Payment Receipt'}*`,
+    `━━━━━━━━━━━━━━━━━━━`,
+    `${isBn ? 'গ্রাহক' : 'Customer'}: ${customerName}${customerPhone ? ` (${customerPhone})` : ''}`,
+    `${isBn ? 'তারিখ' : 'Date'}: ${dateStr}`,
+    `${isBn ? 'মাধ্যম' : 'Payment Method'}: ${methodLabel}`,
+    `━━━━━━━━━━━━━━━━━━━`,
+    `${isBn ? 'পূর্বের বাকি' : 'Previous Due'}: ${formatMoney(previousDue, locale)}`,
+    `${isBn ? 'জমা নেওয়া হয়েছে' : 'Amount Paid'}: ${formatMoney(amountPaid, locale)}`,
+    `${isBn ? 'অবশিষ্ট বাকি' : 'Remaining Due'}: ${isClear ? (isBn ? '০ (সম্পূর্ণ পরিশোধ ✅)' : '0 (Fully Paid ✅)') : formatMoney(remainingDue, locale)}`,
+  ]
+
+  if (note) {
+    lines.push(`${isBn ? 'মন্তব্য' : 'Note'}: ${note}`)
+  }
+
+  lines.push(`━━━━━━━━━━━━━━━━━━━`)
+  if (isClear) {
+    lines.push(isBn ? '🎉 ধন্যবাদ! আপনার সকল বাকি পরিশোধ হয়েছে।' : '🎉 Thank you! All dues have been cleared.')
+  } else {
+    lines.push(isBn ? 'ধন্যবাদ! বাকি টাকা সময়মতো পরিশোধ করার অনুরোধ রইল।' : 'Thank you! Please pay the remaining balance on time.')
+  }
+  lines.push(`দোকান: ${shopName}`)
 
   return lines.join('\n')
 }

@@ -77,10 +77,8 @@ export function AdjustSheet({
     })
     const out = await write.write({ args: { payload } })
     if (out.ok) {
-      void invalidateCacheKey(shopId, 'products:catalog')
-      void invalidateCacheKey(shopId, `product:${product.id}`)
-      void invalidateCacheKey(shopId, 'dashboard:today')
-      void invalidateCachePrefix(shopId, 'products:')
+      await invalidateCachePrefix(shopId, 'products:')
+      await invalidateCacheKey(shopId, 'dashboard:today')
       close()
       onDone?.()
     }

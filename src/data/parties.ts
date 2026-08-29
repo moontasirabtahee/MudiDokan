@@ -249,9 +249,8 @@ export async function createCustomer(shopId: string, draft: CustomerDraft): Prom
       .single(),
   )
 
-  void invalidateCacheKey(shopId, 'party:customers')
-  void invalidateCacheKey(shopId, 'dashboard:today')
-  void invalidateCachePrefix(shopId, 'party:')
+  await invalidateCachePrefix(shopId, 'party:')
+  await invalidateCacheKey(shopId, 'dashboard:today')
 
   return result
 }
@@ -265,11 +264,8 @@ export async function updateCustomer(
   )
 
   if (result.shop_id) {
-    void invalidateCacheKey(result.shop_id, 'party:customers')
-    void invalidateCacheKey(result.shop_id, `party:${customerId}`)
-    void invalidateCacheKey(result.shop_id, `party:ledger:${customerId}`)
-    void invalidateCacheKey(result.shop_id, 'dashboard:today')
-    void invalidateCachePrefix(result.shop_id, 'party:')
+    await invalidateCachePrefix(result.shop_id, 'party:')
+    await invalidateCacheKey(result.shop_id, 'dashboard:today')
   }
 
   return result
@@ -300,8 +296,7 @@ export async function createSupplier(shopId: string, draft: SupplierDraft): Prom
       .single(),
   )
 
-  void invalidateCacheKey(shopId, 'party:suppliers')
-  void invalidateCachePrefix(shopId, 'party:')
+  await invalidateCachePrefix(shopId, 'party:')
 
   return result
 }
@@ -315,10 +310,7 @@ export async function updateSupplier(
   )
 
   if (result.shop_id) {
-    void invalidateCacheKey(result.shop_id, 'party:suppliers')
-    void invalidateCacheKey(result.shop_id, `party:${supplierId}`)
-    void invalidateCacheKey(result.shop_id, `party:ledger:${supplierId}`)
-    void invalidateCachePrefix(result.shop_id, 'party:')
+    await invalidateCachePrefix(result.shop_id, 'party:')
   }
 
   return result

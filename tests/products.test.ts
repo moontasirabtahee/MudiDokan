@@ -152,7 +152,10 @@ suite('toProductDraft')
   const blanks = toProductDraft(emptyDraft('Salt'))
   eq(blanks.buy_price, 0, 'a null cost reaches the server as zero, since the column is not nullable')
   eq(blanks.name_bn, null, 'but a missing name stays absent rather than becoming ""')
-  notOk('stock' in blanks, 'stock is never in the payload — only an adjustment may move it')
+  eq(blanks.opening_stock, null, 'default opening stock is null')
+
+  const withStock = toProductDraft(filled({ opening_stock: 25 }))
+  eq(withStock.opening_stock, 25, 'opening stock is preserved in draft payload')
 }
 
 suite('draftFromProduct and isDirty')

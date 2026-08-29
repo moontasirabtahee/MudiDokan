@@ -105,9 +105,11 @@ export interface ProductDraft {
   low_stock_threshold: number
   expiry_date?: string | null
   note?: string | null
+  opening_stock?: number | null
 }
 
 import { invalidateCacheKey, invalidateCachePrefix } from '@/offline/db'
+import { newId } from '@/lib/utils'
 
 export async function createProduct(shopId: string, draft: ProductDraft): Promise<Product> {
   const result = await unwrap<Product>(
@@ -134,10 +136,27 @@ export async function createProduct(shopId: string, draft: ProductDraft): Promis
       .single(),
   )
 
-  void invalidateCacheKey(shopId, 'products:catalog')
-  void invalidateCacheKey(shopId, 'dashboard:today')
-  void invalidateCachePrefix(shopId, 'products:')
-  void invalidateCachePrefix(shopId, 'product:')
+  if (draft.opening_stock && draft.opening_stock > 0) {
+    try {
+      await supabase.rpc('adjust_stock', {
+        payload: {
+          shop_id: shopId,
+          product_id: result.id,
+          delta: draft.opening_stock,
+          reason: 'count',
+          note: 'Opening stock',
+          client_uuid: newId(),
+        },
+      })
+    } catch (err) {
+      console.warn('[mudidokan] could not set initial stock:', err)
+    }
+  }
+
+  await invalidateCachePrefix(shopId, 'products:')
+  await invalidateCachePrefix(shopId, 'product:')
+  await invalidateCachePrefix(shopId, 'stock:')
+  await invalidateCacheKey(shopId, 'dashboard:today')
 
   return result
 }
@@ -154,11 +173,10 @@ export async function updateProduct(
   )
 
   if (result.shop_id) {
-    void invalidateCacheKey(result.shop_id, 'products:catalog')
-    void invalidateCacheKey(result.shop_id, `product:${productId}`)
-    void invalidateCacheKey(result.shop_id, 'dashboard:today')
-    void invalidateCachePrefix(result.shop_id, 'products:')
-    void invalidateCachePrefix(result.shop_id, 'product:')
+    await invalidateCachePrefix(result.shop_id, 'products:')
+    await invalidateCachePrefix(result.shop_id, 'product:')
+    await invalidateCachePrefix(result.shop_id, 'stock:')
+    await invalidateCacheKey(result.shop_id, 'dashboard:today')
   }
 
   return result
@@ -168,8 +186,7 @@ export async function createCategory(shopId: string, name: string): Promise<Cate
   const result = await unwrap<Category>(
     supabase.from('categories').insert({ shop_id: shopId, name }).select('*').single(),
   )
-  void invalidateCacheKey(shopId, 'categories')
-  void invalidateCachePrefix(shopId, 'categories')
+  await invalidateCachePrefix(shopId, 'categories')
   return result
 }
 

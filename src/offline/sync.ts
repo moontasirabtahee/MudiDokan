@@ -49,6 +49,7 @@ export type SyncEvent =
   | { type: 'sent'; record: OutboxRecord; result: unknown }
   | { type: 'failed'; record: OutboxRecord; failure: FailureInfo }
   | { type: 'drained' }
+  | { type: 'mutated'; op?: string }
 
 const LAST_SYNC_META = 'lastSyncedAt'
 
@@ -99,6 +100,7 @@ export interface SyncEngine {
   /** Attempt a drain. `force` ignores `navigator.onLine` — the user pressed send. */
   flush: (options?: { force?: boolean }) => Promise<void>
   refresh: () => Promise<void>
+  notifyMutation: (op?: string) => void
 }
 
 export function createSyncEngine(options: SyncEngineOptions = {}): SyncEngine {
@@ -304,6 +306,9 @@ export function createSyncEngine(options: SyncEngineOptions = {}): SyncEngine {
     stop,
     flush,
     refresh,
+    notifyMutation(op?: string) {
+      emit({ type: 'mutated', op })
+    },
   }
 }
 
